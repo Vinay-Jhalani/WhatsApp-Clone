@@ -7,8 +7,12 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
-    phoneSuffix: {
+    phonePrefix: {
       type: String,
+    },
+    username: {
+      type: String,
+      unique: true,
     },
     email: {
       type: String,
