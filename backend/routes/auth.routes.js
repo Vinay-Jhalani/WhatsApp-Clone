@@ -5,13 +5,13 @@ import { multerMiddleware } from "../config/cloudinaryConfig.js";
 
 const authRouter = express.Router();
 
-authRouter.post("/send-otp", authController.sendOtp);
-authRouter.post("/verify-otp", authController.verifyOtp);
+authRouter.post("/sendOtp", authController.sendOtp);
+authRouter.post("/verifyOtp", authController.verifyOtp);
 
 // protected routes (isAuthenticated)
 
 authRouter.put(
-  "/update-profile",
+  "/updateProfile",
   isAuthenticated,
   multerMiddleware,
   authController.updateProfile
@@ -19,7 +19,7 @@ authRouter.put(
 
 authRouter.get("/logout", isAuthenticated, authController.logout);
 
-authRouter.get("/check-auth", isAuthenticated, authController.isSessionValid);
+authRouter.get("/checkAuth", isAuthenticated, authController.isSessionValid);
 
 authRouter.get("/users", isAuthenticated, authController.getAllUsers);
 

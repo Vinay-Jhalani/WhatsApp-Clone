@@ -12,11 +12,12 @@ const userSchema = new mongoose.Schema(
     },
     username: {
       type: String,
-      unique: true,
     },
     email: {
       type: String,
       lowercase: true,
+      unique: true,
+      sparse: true,
       validate: {
         validator: function (v) {
           return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(v);

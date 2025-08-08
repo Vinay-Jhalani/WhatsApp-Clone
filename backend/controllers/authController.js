@@ -17,9 +17,11 @@ const sendOtp = async (req, res) => {
       user = await User.findOne({ email });
       if (!user) {
         user = new User({ email });
+        await user.save(); // Save the new user first
       }
       user.otp = otp;
       user.otpExpiry = expiry;
+
       await user.save();
 
       try {
@@ -47,7 +49,7 @@ const sendOtp = async (req, res) => {
       await user.save();
 
       try {
-        await otpSendToWhatsApp(phonePrefix, phoneNumber, otp);
+        await otpSendToWhatsApp(Number(phonePrefix), Number(phoneNumber), otp);
       } catch (otpError) {
         console.error("Failed to send OTP:", otpError.message);
         return response(res, 500, otpError.message);
@@ -57,6 +59,7 @@ const sendOtp = async (req, res) => {
       });
     }
   } catch (error) {
+    console.error("Error in sendOtp:", error);
     return response(res, 500, "Internal server error");
   }
 };
