@@ -402,6 +402,49 @@ export const useChatStore = create((set, get) => ({
     return onlineUsers.get(userId)?.lastSeen || null;
   },
 
+  checkUserStatus: (userId) => {
+    if (!userId) return;
+    const socket = getSocket();
+    if (socket) {
+      socket.emit("get_user_status", userId, (status) => {
+        set((state) => {
+          const newOnlineUsers = new Map(state.onlineUsers);
+          newOnlineUsers.set(userId, {
+            isOnline: status.isOnline,
+            lastSeen: status.lastSeen,
+          });
+          return { onlineUsers: newOnlineUsers };
+        });
+      });
+    }
+  },
+
+  refreshAllUserStatuses: () => {
+    const { conversations, currentUser } = get();
+    const socket = getSocket();
+
+    if (!socket || !conversations?.data) return;
+
+    conversations.data.forEach((conv) => {
+      const otherUser = conv.participants.find(
+        (p) => p._id !== currentUser?._id
+      );
+
+      if (otherUser?._id) {
+        socket.emit("get_user_status", otherUser._id, (status) => {
+          set((state) => {
+            const newOnlineUsers = new Map(state.onlineUsers);
+            newOnlineUsers.set(otherUser._id, {
+              isOnline: status.isOnline,
+              lastSeen: status.lastSeen,
+            });
+            return { onlineUsers: newOnlineUsers };
+          });
+        });
+      }
+    });
+  },
+
   cleanup: () => {
     set({
       conversation: [],

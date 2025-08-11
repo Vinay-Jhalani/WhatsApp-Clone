@@ -96,7 +96,6 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
       );
       if (conversation) {
         fetchMessages(conversation._id);
-        console.log("Fetching messages for conversation:", conversation._id);
       }
     }
   }, [selectedContact, conversations, fetchMessages]);

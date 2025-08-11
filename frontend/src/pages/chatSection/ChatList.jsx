@@ -21,6 +21,8 @@ const ChatList = ({ contacts }) => {
     isUserOnline,
     getUserLastSeen,
     initializeSocketListeners,
+    checkUserStatus,
+    refreshAllUserStatuses,
   } = useChatStore();
   const [searchTerms, setSearchTerms] = useState("");
 
@@ -31,7 +33,20 @@ const ChatList = ({ contacts }) => {
   useEffect(() => {
     fetchConversations();
     initializeSocketListeners();
-  }, [fetchConversations, initializeSocketListeners]);
+
+    // Refresh all user statuses when component mounts
+    refreshAllUserStatuses();
+
+    // Set up interval to refresh all user statuses
+    const refreshInterval = setInterval(() => {
+      refreshAllUserStatuses();
+    }, 60000); // Refresh all statuses every minute
+
+    // Cleanup function when component unmounts
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [fetchConversations, initializeSocketListeners, refreshAllUserStatuses]);
 
   // Merge conversation data with contacts
   useEffect(() => {
@@ -61,9 +76,31 @@ const ChatList = ({ contacts }) => {
     }
   }, [conversations, contacts]);
 
+  // Periodically check online status of selected contact
+  useEffect(() => {
+    if (selectedContact && selectedContact._id) {
+      // Check status immediately when contact changes
+      checkUserStatus(selectedContact._id);
+
+      // Set up interval to periodically check status
+      const statusInterval = setInterval(() => {
+        checkUserStatus(selectedContact._id);
+      }, 30000); // Check every 30 seconds
+
+      return () => clearInterval(statusInterval);
+    }
+  }, [selectedContact, checkUserStatus]);
+
   const filteredContacts = allContacts?.filter((contact) => {
     return contact?.username?.toLowerCase().includes(searchTerms.toLowerCase());
   });
+
+  // Handle contact selection
+  const handleContactSelect = (contact) => {
+    // No need to check status here as the useEffect will handle it
+    setSelectedContact(contact);
+  };
+
   return (
     <div
       className={`w-full border-r h-screen ${
@@ -104,11 +141,10 @@ const ChatList = ({ contacts }) => {
       </div>
       <div className="overflow-y-auto h-[calc(100vh-120px)] ">
         {filteredContacts.map((contact) => {
-          console.log(contact);
           return (
             <motion.div
               key={contact._id}
-              onClick={() => setSelectedContact(contact)}
+              onClick={() => handleContactSelect(contact)}
               className={`p-3 flex items-center cursor-pointer ${
                 theme === "dark"
                   ? selectedContact?._id === contact._id
@@ -120,17 +156,27 @@ const ChatList = ({ contacts }) => {
               }`}
             >
               {contact?.profilePicture ? (
-                <img
-                  src={contact?.profilePicture}
-                  alt={contact.username}
-                  className="w-10 h-10 rounded-full mr-3"
-                />
+                <div className="relative">
+                  <img
+                    src={contact?.profilePicture}
+                    alt={contact.username}
+                    className="w-10 h-10 rounded-full mr-3"
+                  />
+                  {isUserOnline(contact._id) && (
+                    <span className="absolute bottom-0 right-3 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800"></span>
+                  )}
+                </div>
               ) : (
-                <Avatar
-                  name={contact?.username || user?.email || "User"}
-                  size="w-10 h-10 "
-                  textSize="text-lg"
-                />
+                <div className="relative">
+                  <Avatar
+                    name={contact?.username || user?.email || "User"}
+                    size="w-10 h-10 "
+                    textSize="text-lg"
+                  />
+                  {isUserOnline(contact._id) && (
+                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800"></span>
+                  )}
+                </div>
               )}
               <div className="ml-3 flex-1">
                 <div className="flex justify-between items-baseline">
