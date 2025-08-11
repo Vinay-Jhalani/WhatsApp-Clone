@@ -100,9 +100,52 @@ const ChatList = ({ contacts }) => {
 
   // Handle contact selection
   const handleContactSelect = (contact) => {
-    // No need to check status here as the useEffect will handle it
     setSelectedContact(contact);
+    // Mark messages as read for this contact in the UI immediately
+    setAllContacts((prevContacts) =>
+      prevContacts.map((c) => {
+        if (
+          c._id === contact._id &&
+          c.conversation &&
+          c.conversation.unreadCount > 0 &&
+          c.conversation.lastMessage?.receiver?._id === user._id?.toString()
+        ) {
+          return {
+            ...c,
+            conversation: {
+              ...c.conversation,
+              unreadCount: 0,
+            },
+          };
+        }
+        return c;
+      })
+    );
   };
+
+  // Mark unread as read for pre-opened chat window (on mount, when selectedContact or conversations change)
+  useEffect(() => {
+    if (!selectedContact || !selectedContact._id) return;
+    setAllContacts((prevContacts) =>
+      prevContacts.map((c) => {
+        if (
+          c._id === selectedContact._id &&
+          c.conversation &&
+          c.conversation.unreadCount > 0 &&
+          c.conversation.lastMessage?.receiver?._id === user._id?.toString()
+        ) {
+          return {
+            ...c,
+            conversation: {
+              ...c.conversation,
+              unreadCount: 0,
+            },
+          };
+        }
+        return c;
+      })
+    );
+  }, [selectedContact, user._id, conversations]);
 
   console.log("Contacts in ChatList:", contacts);
   console.log("Current user:", user);

@@ -66,7 +66,7 @@ const Layout = ({
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "tween" }}
-              className={`w-full h-full ${isMobile ? "pb-16" : ""}`}
+              className={`w-full h-full ${isMobile ? "" : ""}`}
             >
               {
                 <ChatWindow
