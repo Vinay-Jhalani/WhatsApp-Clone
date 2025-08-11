@@ -133,6 +133,26 @@ export const useChatStore = create((set, get) => ({
     set({ loading: true, error: null });
     try {
       const { data } = await axiosInstance.get(`/chat/conversations`);
+
+      // Debug logging for unread counts
+      console.log(
+        "🔍 Raw conversations from backend:",
+        data.data?.map((conv) => ({
+          id: conv._id,
+          participants: conv.participants?.map((p) => p._id),
+          unreadCount: conv.unreadCount,
+          lastMessage: conv.lastMessage
+            ? {
+                id: conv.lastMessage._id,
+                content: conv.lastMessage.content,
+                sender: conv.lastMessage.sender,
+                receiver: conv.lastMessage.receiver,
+                messageStatus: conv.lastMessage.messageStatus,
+              }
+            : null,
+        }))
+      );
+
       set({ conversations: data, loading: false });
     } catch (error) {
       set({
@@ -289,8 +309,7 @@ export const useChatStore = create((set, get) => ({
           return {
             ...conv,
             lastMessage: message,
-            // Remove local increment - let backend handle unread counts
-            unreadCount: conv.unreadCount || 0,
+            // Don't modify unreadCount here - let the backend refresh handle it
           };
         }
         return conv;
@@ -300,13 +319,11 @@ export const useChatStore = create((set, get) => ({
       };
     });
 
-    // Refresh conversations from server to get correct unread counts
-    // Only do this if the message is for the current user (not sent by them)
-    if (message?.receiver?._id === get().currentUser?._id) {
-      setTimeout(() => {
-        get().fetchConversations();
-      }, 500); // Small delay to ensure backend has processed the message
-    }
+    // Always refresh conversations from server to get correct unread counts
+    // Small delay to ensure backend has processed the message
+    setTimeout(() => {
+      get().fetchConversations();
+    }, 500);
   },
 
   //mark as read
@@ -322,6 +339,25 @@ export const useChatStore = create((set, get) => ({
       .map((msg) => msg._id)
       .filter(Boolean);
 
+    console.log("📖 Marking messages as read:", {
+      totalMessages: messages.length,
+      unreadIds: unreadIds,
+      currentUserId: currentUser._id,
+      unreadMessages: messages
+        .filter(
+          (msg) =>
+            msg.messageStatus !== "read" &&
+            msg.receiver?._id === currentUser._id
+        )
+        .map((msg) => ({
+          id: msg._id,
+          content: msg.content,
+          sender: msg.sender?._id,
+          receiver: msg.receiver?._id,
+          status: msg.messageStatus,
+        })),
+    });
+
     if (unreadIds.length === 0) return;
 
     try {
@@ -336,6 +372,8 @@ export const useChatStore = create((set, get) => ({
 
       const socket = getSocket();
       socket.emit("message_read", unreadIds, messages[0]?.sender?._id);
+
+      console.log("✅ Successfully marked messages as read:", unreadIds);
     } catch (error) {
       console.error("Error marking messages as read:", error);
     }
