@@ -64,12 +64,13 @@ const ChatList = ({ contacts }) => {
             ? {
                 _id: conversation._id,
                 lastMessage: conversation.lastMessage,
-                unreadCount: conversation.unreadCount || 0,
+                unreadCount: conversation.unreadCount, // Remove the || 0 fallback that might be causing issues
               }
             : null,
         };
       });
 
+      console.log("Enhanced contacts with conversations:", enhancedContacts);
       setAllContacts(enhancedContacts);
     } else {
       setAllContacts(contacts || []);
@@ -100,6 +101,29 @@ const ChatList = ({ contacts }) => {
     // No need to check status here as the useEffect will handle it
     setSelectedContact(contact);
   };
+
+  console.log("Contacts in ChatList:", contacts);
+  console.log("Current user:", user);
+  console.log("Conversations data:", conversations);
+  console.log("All contacts with conversation data:", allContacts);
+
+  // Debug unread count logic
+  if (allContacts.length > 0) {
+    allContacts.forEach((contact) => {
+      if (contact?.conversation?.unreadCount > 0) {
+        console.log(`🔍 Unread count debug for ${contact.username}:`, {
+          unreadCount: contact.conversation.unreadCount,
+          lastMessageSender: contact.conversation.lastMessage?.sender,
+          lastMessageReceiver: contact.conversation.lastMessage?.receiver,
+          currentUserId: user?._id,
+          shouldShowBadge:
+            contact.conversation.unreadCount > 0 &&
+            contact.conversation.lastMessage?.sender !== user?._id &&
+            contact.conversation.lastMessage?.receiver === user?._id,
+        });
+      }
+    });
+  }
 
   return (
     <div
@@ -187,7 +211,7 @@ const ChatList = ({ contacts }) => {
                   >
                     {contact.username}
                   </h2>
-                  {contact?.conversation && (
+                  {contact?.conversation?.lastMessage?.createdAt && (
                     <span
                       className={`text-xs ${
                         theme === "dark" ? "text-gray-400" : "text-gray-500"
@@ -207,14 +231,11 @@ const ChatList = ({ contacts }) => {
                   >
                     {contact?.conversation?.lastMessage?.content}
                   </p>
-                  {contact?.conversation &&
-                    contact?.conversation?.unreadCount > 0 &&
-                    contact?.conversation?.lastMessage?.receiver ===
-                      user?._id && (
+                  {contact?.conversation?.unreadCount > 0 &&
+                    contact?.conversation?.lastMessage?.receiver?._id ===
+                      user._id?.toString() && (
                       <p
-                        className={`text-xs font-bold  w-6 h-6 flex items-center justify-center bg-green-200 rounded-full ${
-                          theme === "dark" ? "text-gray-400" : "text-gray-500"
-                        }`}
+                        className={`text-xs font-bold w-6 h-6 flex items-center justify-center bg-green-500 text-white rounded-full`}
                       >
                         {contact?.conversation?.unreadCount}
                       </p>

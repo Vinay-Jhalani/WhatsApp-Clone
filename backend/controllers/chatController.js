@@ -50,8 +50,17 @@ const sendMessage = async (req, res) => {
 
     await message.save();
 
-    if (message.content) {
+    if (message.content || imageOrVideoUrl) {
       conversation.lastMessage = message._id;
+
+      // Increment unreadCount when a new message is sent
+      // Only increment if the receiver is not the sender (to handle self-messages)
+      if (senderId !== receiverId) {
+        conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+        console.log(
+          `Incremented unreadCount to ${conversation.unreadCount} for conversation ${conversation._id}`
+        );
+      }
     }
     await conversation.save();
 
@@ -93,6 +102,16 @@ const getConversations = async (req, res) => {
       })
       .sort({ updatedAt: -1 })
       .lean();
+
+    // Make sure unreadCount is included for each conversation
+    conversations = conversations.map((conv) => {
+      return {
+        ...conv,
+        unreadCount: conv.unreadCount || 0,
+      };
+    });
+
+    console.log(conversations);
 
     return response(
       res,
@@ -198,6 +217,25 @@ const markMessageAsRead = async (req, res) => {
       { _id: { $in: messageIds }, receiver: userId },
       { $set: { messageStatus: "read" } }
     );
+
+    // Find all conversation IDs related to these messages
+    const messageDetails = await Message.find(
+      { _id: { $in: messageIds } },
+      { conversation: 1 }
+    );
+
+    // Extract unique conversation IDs
+    const conversationIds = [
+      ...new Set(messageDetails.map((msg) => msg.conversation.toString())),
+    ];
+
+    // Reset unreadCount for these conversations
+    if (conversationIds.length > 0) {
+      await Conversation.updateMany(
+        { _id: { $in: conversationIds } },
+        { $set: { unreadCount: 0 } }
+      );
+    }
 
     // Notify senders that their messages were read
     if (req.io && req.socketUserMap) {

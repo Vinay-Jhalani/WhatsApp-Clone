@@ -159,9 +159,17 @@ export const useChatStore = create((set, get) => ({
         loading: false,
       });
 
-      //mark messages as read if they are unread
-      const { markMessagesAsRead } = get();
-      markMessagesAsRead();
+      // Only mark messages as read if there are unread messages where current user is the receiver
+      const { currentUser } = get();
+      const hasUnreadMessagesForCurrentUser = messageArray.some(
+        (msg) =>
+          msg.messageStatus !== "read" && msg.receiver?._id === currentUser?._id
+      );
+
+      if (hasUnreadMessagesForCurrentUser) {
+        const { markMessagesAsRead } = get();
+        markMessagesAsRead();
+      }
 
       return messageArray;
     } catch (error) {
@@ -281,11 +289,8 @@ export const useChatStore = create((set, get) => ({
           return {
             ...conv,
             lastMessage: message,
-            unreadCount:
-              message?.receiver?._id === currentUser?._id &&
-              message.conversation !== currentConversation
-                ? (conv.unreadCount || 0) + 1
-                : conv.unreadCount || 0,
+            // Remove local increment - let backend handle unread counts
+            unreadCount: conv.unreadCount || 0,
           };
         }
         return conv;
@@ -294,6 +299,14 @@ export const useChatStore = create((set, get) => ({
         conversations: { ...state.conversations, data: updateConversations },
       };
     });
+
+    // Refresh conversations from server to get correct unread counts
+    // Only do this if the message is for the current user (not sent by them)
+    if (message?.receiver?._id === get().currentUser?._id) {
+      setTimeout(() => {
+        get().fetchConversations();
+      }, 500); // Small delay to ensure backend has processed the message
+    }
   },
 
   //mark as read
@@ -312,7 +325,7 @@ export const useChatStore = create((set, get) => ({
     if (unreadIds.length === 0) return;
 
     try {
-      const { data } = await axiosInstance.put(`/chat/messages/read`, {
+      await axiosInstance.put(`/chat/messages/read`, {
         messageIds: unreadIds,
       });
       set((state) => ({
