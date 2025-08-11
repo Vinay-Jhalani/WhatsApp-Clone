@@ -111,8 +111,6 @@ const getConversations = async (req, res) => {
       };
     });
 
-    console.log(conversations);
-
     return response(
       res,
       200,
@@ -149,7 +147,7 @@ const getMessages = async (req, res) => {
     });
 
     if (unreadMessages.length > 0) {
-      // Update message status to read
+      // Only mark as read and reset unreadCount if the current user is the receiver
       await Message.updateMany(
         {
           conversation: conversationId,
@@ -158,6 +156,15 @@ const getMessages = async (req, res) => {
         },
         { $set: { messageStatus: "read" } }
       );
+
+      // Reset unreadCount only if the current user is the receiver of any unread messages
+      const isReceiver = unreadMessages.some(
+        (msg) => msg.receiver.toString() === userId.toString()
+      );
+      if (isReceiver) {
+        conversation.unreadCount = 0;
+        await conversation.save();
+      }
 
       // Notify senders that their messages were read
       if (req.io && req.socketUserMap) {
@@ -185,9 +192,6 @@ const getMessages = async (req, res) => {
         }
       }
     }
-
-    conversation.unreadCount = 0;
-    await conversation.save();
 
     return response(res, 200, "Messages fetched successfully", messages);
   } catch (error) {

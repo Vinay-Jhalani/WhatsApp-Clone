@@ -181,9 +181,11 @@ export const useChatStore = create((set, get) => ({
 
       // Only mark messages as read if there are unread messages where current user is the receiver
       const { currentUser } = get();
+      console.log(currentUser);
       const hasUnreadMessagesForCurrentUser = messageArray.some(
         (msg) =>
-          msg.messageStatus !== "read" && msg.receiver?._id === currentUser?._id
+          msg.messageStatus !== "read" &&
+          msg.receiver?._id.toString() === currentUser?._id.toString()
       );
 
       if (hasUnreadMessagesForCurrentUser) {
@@ -270,6 +272,23 @@ export const useChatStore = create((set, get) => ({
           msg._id === tempId ? messageData : msg
         ),
       }));
+
+      // Immediately update the lastMessage in conversations for sender's chat list
+      set((state) => {
+        if (!state.conversations?.data) return {};
+        const updateConversations = state.conversations.data.map((conv) => {
+          if (conv._id === messageData.conversation) {
+            return {
+              ...conv,
+              lastMessage: messageData,
+            };
+          }
+          return conv;
+        });
+        return {
+          conversations: { ...state.conversations, data: updateConversations },
+        };
+      });
     } catch (error) {
       console.error("Error sending message:", error);
       set((state) => ({
@@ -331,6 +350,7 @@ export const useChatStore = create((set, get) => ({
     const { messages, currentUser } = get();
 
     if (!messages.length || !currentUser) return;
+    // Only mark as read if the current user is the receiver of any unread messages
     const unreadIds = messages
       .filter(
         (msg) =>
@@ -338,25 +358,6 @@ export const useChatStore = create((set, get) => ({
       )
       .map((msg) => msg._id)
       .filter(Boolean);
-
-    console.log("📖 Marking messages as read:", {
-      totalMessages: messages.length,
-      unreadIds: unreadIds,
-      currentUserId: currentUser._id,
-      unreadMessages: messages
-        .filter(
-          (msg) =>
-            msg.messageStatus !== "read" &&
-            msg.receiver?._id === currentUser._id
-        )
-        .map((msg) => ({
-          id: msg._id,
-          content: msg.content,
-          sender: msg.sender?._id,
-          receiver: msg.receiver?._id,
-          status: msg.messageStatus,
-        })),
-    });
 
     if (unreadIds.length === 0) return;
 
@@ -371,9 +372,10 @@ export const useChatStore = create((set, get) => ({
       }));
 
       const socket = getSocket();
-      socket.emit("message_read", unreadIds, messages[0]?.sender?._id);
-
-      console.log("✅ Successfully marked messages as read:", unreadIds);
+      // Only emit if the current user is the receiver
+      if (messages.some((msg) => msg.receiver?._id === currentUser._id)) {
+        socket.emit("message_read", unreadIds, messages[0]?.sender?._id);
+      }
     } catch (error) {
       console.error("Error marking messages as read:", error);
     }

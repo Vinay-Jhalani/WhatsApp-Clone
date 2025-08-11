@@ -57,20 +57,22 @@ const ChatList = ({ contacts }) => {
           conv.participants.some((p) => p._id === contact._id)
         );
 
-        // Return the enhanced contact with conversation data
+        // If conversation exists, always use the latest lastMessage and unreadCount
+        let lastMessage = conversation?.lastMessage;
+        let unreadCount = conversation?.unreadCount;
+
         return {
           ...contact,
           conversation: conversation
             ? {
                 _id: conversation._id,
-                lastMessage: conversation.lastMessage,
-                unreadCount: conversation.unreadCount, // Remove the || 0 fallback that might be causing issues
+                lastMessage,
+                unreadCount,
               }
             : null,
         };
       });
 
-      console.log("Enhanced contacts with conversations:", enhancedContacts);
       setAllContacts(enhancedContacts);
     } else {
       setAllContacts(contacts || []);
