@@ -13,7 +13,7 @@ const initializeSocket = (server) => {
     cors: {
       origin: process.env.FRONTEND_URL,
       credentials: true,
-      methods: ["GET", "POST"],
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     },
     pingTimeout: 60000, //Disconnect after 60 seconds of inactivity
   });
@@ -35,7 +35,19 @@ const initializeSocket = (server) => {
           isOnline: true,
           lastSeen: new Date(),
         });
+
+        // Notify everyone about this user's online status
         io.emit("user_status", { userId, isOnline: true });
+
+        // Send this user the online status of all other connected users
+        for (const [onlineUserId, socketId] of onlineUsers.entries()) {
+          if (onlineUserId !== userId) {
+            socket.emit("user_status", {
+              userId: onlineUserId,
+              isOnline: true,
+            });
+          }
+        }
       } catch (error) {
         console.error("Error in user_connected:", error);
       }
@@ -57,7 +69,7 @@ const initializeSocket = (server) => {
       try {
         const receiverSocketId = onlineUsers.get(messageData.receiver?._id);
         if (receiverSocketId) {
-          io.to(receiverSocketId).emit("message", messageData);
+          io.to(receiverSocketId).emit("receive_message", messageData);
         }
       } catch (error) {
         console.error("Error sending message:", error);
@@ -67,13 +79,42 @@ const initializeSocket = (server) => {
       }
     });
 
+    //update message as delivered when received
+    socket.on("message_delivered", async (messageId, senderId) => {
+      try {
+        // Update message status in the database
+        const message = await Message.findById(messageId);
+        if (!message) {
+          console.error("Message not found for delivery update:", messageId);
+          return;
+        }
+
+        // Only update if current status is "sent"
+        if (message.messageStatus === "sent") {
+          message.messageStatus = "delivered";
+          await message.save();
+
+          // Notify sender about the delivered status
+          const senderSocketId = onlineUsers.get(senderId);
+          if (senderSocketId) {
+            io.to(senderSocketId).emit("message_status_update", {
+              messageId,
+              messageStatus: "delivered",
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error marking message as delivered:", error);
+      }
+    });
+
     //update message as read and notify sender
     socket.on("message_read", async (messageIds, senderId) => {
       try {
         // Update message status in the database
         await Message.updateMany(
           { _id: { $in: messageIds }, sender: senderId },
-          { $set: { status: "read" } }
+          { $set: { messageStatus: "read" } }
         );
 
         // Notify sender about the read status
@@ -145,19 +186,30 @@ const initializeSocket = (server) => {
     //Add or update reaction on message
     socket.on(
       "add_reaction",
-      async ({ messageId, emoji, userId, reactionUserId }) => {
+      async ({ messageId, emoji, userId: reactionUserId }) => {
         try {
           const message = await Message.findById(messageId);
-          if (!message) return;
+          if (!message) {
+            console.error("Message not found for reaction:", messageId);
+            return;
+          }
+
+          // Ensure reactions array exists
+          if (!message.reactions) {
+            message.reactions = [];
+          }
 
           const existingIndex = message.reactions.findIndex(
-            (reaction) => reaction.user.toString() === reactionUserId.toString()
+            (reaction) => reaction.user.toString() === reactionUserId
           );
           if (existingIndex > -1) {
             const existing = message.reactions[existingIndex];
             if (existing.emoji === emoji) {
               // Remove reaction if same emoji is clicked again
               message.reactions.splice(existingIndex, 1);
+            } else {
+              // Update the emoji if it's different
+              message.reactions[existingIndex].emoji = emoji;
             }
           } else {
             // Add new reaction
@@ -214,6 +266,9 @@ const initializeSocket = (server) => {
           isOnline: false,
           lastSeen: new Date(),
         });
+
+        // Notify all users that this user is now offline
+        io.emit("user_status", { userId, isOnline: false });
 
         socket.leave(userId);
         console.log("User disconnected:", userId);

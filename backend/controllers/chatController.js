@@ -122,14 +122,50 @@ const getMessages = async (req, res) => {
       .sort({ createdAt: 1 })
       .lean();
 
-    await Message.updateMany(
-      {
-        conversation: conversationId,
-        receiver: userId,
-        messageStatus: { $ne: "read" },
-      },
-      { $set: { messageStatus: "read" } }
-    );
+    // Find messages that need to be marked as read
+    const unreadMessages = await Message.find({
+      conversation: conversationId,
+      receiver: userId,
+      messageStatus: { $ne: "read" },
+    });
+
+    if (unreadMessages.length > 0) {
+      // Update message status to read
+      await Message.updateMany(
+        {
+          conversation: conversationId,
+          receiver: userId,
+          messageStatus: { $ne: "read" },
+        },
+        { $set: { messageStatus: "read" } }
+      );
+
+      // Notify senders that their messages were read
+      if (req.io && req.socketUserMap) {
+        // Group messages by sender to send notifications efficiently
+        const messagesBySender = {};
+        unreadMessages.forEach((message) => {
+          const senderId = message.sender.toString();
+          if (!messagesBySender[senderId]) {
+            messagesBySender[senderId] = [];
+          }
+          messagesBySender[senderId].push(message._id);
+        });
+
+        // Send notifications to each sender
+        for (const [senderId, messageIds] of Object.entries(messagesBySender)) {
+          const senderSocketId = req.socketUserMap.get(senderId);
+          if (senderSocketId) {
+            messageIds.forEach((messageId) => {
+              req.io.to(senderSocketId).emit("message_status_update", {
+                messageId,
+                messageStatus: "read",
+              });
+            });
+          }
+        }
+      }
+    }
 
     conversation.unreadCount = 0;
     await conversation.save();
@@ -146,25 +182,47 @@ const markMessageAsRead = async (req, res) => {
   const userId = req.userId;
 
   try {
+    // Find messages that need to be marked as read
     let messages = await Message.find({
       _id: { $in: messageIds },
       receiver: userId,
+      messageStatus: { $ne: "read" },
     });
 
+    if (messages.length === 0) {
+      return response(res, 200, "No messages to mark as read");
+    }
+
+    // Update message status to read
     await Message.updateMany(
       { _id: { $in: messageIds }, receiver: userId },
       { $set: { messageStatus: "read" } }
     );
 
+    // Notify senders that their messages were read
     if (req.io && req.socketUserMap) {
-      for (const message of messages) {
-        const senderSocketId = req.socketUserMap.get(message.sender.toString());
+      // Group messages by sender to send notifications efficiently
+      const messagesBySender = {};
+      messages.forEach((message) => {
+        const senderId = message.sender.toString();
+        if (!messagesBySender[senderId]) {
+          messagesBySender[senderId] = [];
+        }
+        messagesBySender[senderId].push(message._id);
+      });
+
+      // Send notifications to each sender
+      for (const [senderId, senderMessageIds] of Object.entries(
+        messagesBySender
+      )) {
+        const senderSocketId = req.socketUserMap.get(senderId);
         if (senderSocketId) {
-          req.io.to(senderSocketId).emit("message_read", {
-            _id: message._id,
-            messageStatus: "read",
+          senderMessageIds.forEach((messageId) => {
+            req.io.to(senderSocketId).emit("message_status_update", {
+              messageId,
+              messageStatus: "read",
+            });
           });
-          await message.save();
         }
       }
     }

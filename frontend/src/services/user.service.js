@@ -43,7 +43,7 @@ export const checkUserAuth = async () => {
   try {
     const response = await axiosInstance.get(`/auth/checkAuth`);
     if (response.data.status === "success") {
-      return { isAuthenticated: true, user: response?.data?.user };
+      return { isAuthenticated: true, user: response?.data?.data?.user };
     } else if (response.data.status === "error") {
       return { isAuthenticated: false };
     }
