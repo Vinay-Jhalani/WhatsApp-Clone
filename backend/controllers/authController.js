@@ -201,7 +201,7 @@ const getAllUsers = async (req, res) => {
         })
           .populate({
             path: "lastMessage",
-            select: "content createdAt sender receiver",
+            select: "content createdAt sender receiver contentType messageStatus",
           })
           .lean();
         return { ...user, conversation: conversation || null };

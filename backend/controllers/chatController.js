@@ -64,7 +64,7 @@ const sendMessage = async (req, res) => {
     if (req.io && req.socketUserMap) {
       const receiverSocket = req.socketUserMap.get(receiverId);
       if (receiverSocket) {
-        req.io.to(receiverSocket).emit("receiveMessage", populatedMessage);
+        req.io.to(receiverSocket).emit("receive_message", populatedMessage);
         message.messageStatus = "delivered";
         await message.save();
       }
@@ -111,7 +111,7 @@ const getMessages = async (req, res) => {
   const userId = req.userId;
   try {
     const conversation = await Conversation.findById(conversationId);
-    if (conversation) {
+    if (!conversation) {
       return response(res, 404, "Conversation not found");
     }
     if (!conversation.participants.includes(userId)) {
@@ -160,7 +160,7 @@ const markMessageAsRead = async (req, res) => {
       for (const message of messages) {
         const senderSocketId = req.socketUserMap.get(message.sender.toString());
         if (senderSocketId) {
-          req.io.to(senderSocketId).emit("messageRead", {
+          req.io.to(senderSocketId).emit("message_read", {
             _id: message._id,
             messageStatus: "read",
           });
@@ -194,7 +194,7 @@ const deleteMessage = async (req, res) => {
           message.receiver.toString()
         );
         if (receiverSocketId) {
-          req.io.to(receiverSocketId).emit("messageDeleted", messageId);
+          req.io.to(receiverSocketId).emit("message_deleted", messageId);
         }
       }
     }

@@ -53,7 +53,7 @@ const createStatus = async (req, res) => {
       //broadcast to all connecting users except the creator
       for (const [connectedUserId, socketId] of req.socketUserMap) {
         if (connectedUserId !== userId) {
-          req.io.to(socketId).emit("newStatus", populatedStatus);
+          req.io.to(socketId).emit("new_status", populatedStatus);
         }
       }
     }
@@ -122,7 +122,7 @@ const viewStatus = async (req, res) => {
             totalViews: updatedStatus.viewers.length,
             viewers: updatedStatus.viewers,
           };
-          req.io.to(statusOwnerSocketId).emit("statusViewed", viewData);
+          req.io.to(statusOwnerSocketId).emit("status_viewed", viewData);
         }
       }
 
@@ -211,7 +211,7 @@ const deleteStatus = async (req, res) => {
       if (req.io && req.socketUserMap) {
         for (const [connectedUserId, socketId] of req.socketUserMap) {
           if (connectedUserId !== userId) {
-            req.io.to(socketId).emit("statusDeleted", statusId);
+            req.io.to(socketId).emit("status_deleted", statusId);
           }
         }
       }

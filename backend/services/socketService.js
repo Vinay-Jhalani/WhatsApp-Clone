@@ -26,7 +26,7 @@ const initializeSocket = (server) => {
 
     //handle user connection and mark them online in db
 
-    socket.on("userConnected", async (connectingUserId) => {
+    socket.on("user_connected", async (connectingUserId) => {
       try {
         userId = connectingUserId;
         onlineUsers.set(userId, socket.id);
@@ -35,14 +35,14 @@ const initializeSocket = (server) => {
           isOnline: true,
           lastSeen: new Date(),
         });
-        io.emit("userStatus", { userId, isOnline: true });
+        io.emit("user_status", { userId, isOnline: true });
       } catch (error) {
-        console.error("Error in userConnected:", error);
+        console.error("Error in user_connected:", error);
       }
     });
 
     // Return online status of requested user
-    socket.on("getUserStatus", async (requestedUserId, callback) => {
+    socket.on("get_user_status", async (requestedUserId, callback) => {
       const isOnline = onlineUsers.has(requestedUserId);
       callback({
         userId: requestedUserId,
@@ -53,7 +53,7 @@ const initializeSocket = (server) => {
 
     //forward message to receiver if online
 
-    socket.on("sendMessage", async (messageData) => {
+    socket.on("send_message", async (messageData) => {
       try {
         const receiverSocketId = onlineUsers.get(messageData.receiver?._id);
         if (receiverSocketId) {
@@ -68,7 +68,7 @@ const initializeSocket = (server) => {
     });
 
     //update message as read and notify sender
-    socket.on("messageRead", async (messageIds, senderId) => {
+    socket.on("message_read", async (messageIds, senderId) => {
       try {
         // Update message status in the database
         await Message.updateMany(
@@ -92,7 +92,7 @@ const initializeSocket = (server) => {
     });
 
     //handle typing start event and automatically stop typing after 5 seconds
-    socket.on("typingStart", ({ conversationId, receiverId }) => {
+    socket.on("typing_start", ({ conversationId, receiverId }) => {
       if (!userId || !conversationId || !receiverId) return;
 
       if (!typingUsers.has(userId)) typingUsers.set(userId, {});
@@ -123,7 +123,7 @@ const initializeSocket = (server) => {
       });
     });
 
-    socket.on("typingStop", ({ conversationId, receiverId }) => {
+    socket.on("typing_stop", ({ conversationId, receiverId }) => {
       if (!userId || !conversationId || !receiverId) return;
 
       if (typingUsers.has(userId)) {
@@ -144,7 +144,7 @@ const initializeSocket = (server) => {
 
     //Add or update reaction on message
     socket.on(
-      "addReaction",
+      "add_reaction",
       async ({ messageId, emoji, userId, reactionUserId }) => {
         try {
           const message = await Message.findById(messageId);
@@ -184,9 +184,9 @@ const initializeSocket = (server) => {
           );
 
           if (senderSocket)
-            io.to(senderSocket).emit("reactionUpdated", reactionUpdated);
+            io.to(senderSocket).emit("reaction_updated", reactionUpdated);
           if (receiverSocket)
-            io.to(receiverSocket).emit("reactionUpdated", reactionUpdated);
+            io.to(receiverSocket).emit("reaction_updated", reactionUpdated);
         } catch (error) {
           console.error("Error adding reaction:", error);
         }
