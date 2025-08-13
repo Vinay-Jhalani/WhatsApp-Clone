@@ -1,4 +1,4 @@
-import React, { use, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import useThemeStore from "../../store/useThemeStore";
 import useUserStore from "../../store/useUserStore";
 import { isToday, isYesterday, format, formatDate } from "date-fns";
@@ -15,9 +15,11 @@ import {
   FaVideo,
   FaWhatsapp,
 } from "react-icons/fa";
+
 import Avatar from "../../components/Avatar";
 import MessageBubble from "./MessageBubble";
 import EmojiPicker from "emoji-picker-react";
+import SkeletonLoader from "../../components/SkeletonLoader";
 
 const isValidDate = (date) => {
   return date instanceof Date && !isNaN(date);
@@ -31,19 +33,26 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [emojisLoaded, setEmojisLoaded] = useState(false);
   const [preRenderedPicker, setPreRenderedPicker] = useState(null);
+
+  // Animation and loading states
+  const [isDataLoading, setIsDataLoading] = useState(false);
+  const [showContent, setShowContent] = useState(true);
+  const [lastSelectedContactId, setLastSelectedContactId] = useState(null);
+
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const EmojiPickerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const animationTimeoutRef = useRef(null);
+  const isLoadingRef = useRef(false);
+  const debounceTimeoutRef = useRef(null);
 
   const { theme } = useThemeStore();
   const { user } = useUserStore();
 
   const {
     messages,
-    loading,
     sendMessage,
-    receiveMessage,
     fetchMessages,
     fetchConversations,
     conversations,
@@ -52,14 +61,128 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
     stopTyping,
     getUserLastSeen,
     isUserOnline,
-    cleanUp,
     deleteMessage,
     addReaction,
+    currentConversation,
+    clearMessages,
+    cleanupOldOptimisticMessages,
+    set: setChatStore,
+    markMessagesAsRead,
   } = useChatStore();
+  // Mark messages as read when chat is opened and messages are loaded
+  useEffect(() => {
+    if (
+      selectedContact?._id &&
+      Array.isArray(messages) &&
+      messages.length > 0
+    ) {
+      // Only mark as read if there are unread messages for the current user
+      const hasUnread = messages.some(
+        (msg) =>
+          msg.messageStatus !== "read" &&
+          msg.receiver?._id === user._id &&
+          (msg.conversation === currentConversation ||
+            (msg.isOptimistic &&
+              msg.isNewConversation &&
+              msg.sender._id === user._id &&
+              msg.receiver._id === selectedContact._id))
+      );
+      if (hasUnread) {
+        markMessagesAsRead();
+      }
+    }
+  }, [
+    selectedContact,
+    messages,
+    currentConversation,
+    user._id,
+    markMessagesAsRead,
+  ]);
 
   const online = isUserOnline(selectedContact?._id);
   const lastSeen = getUserLastSeen(selectedContact?._id);
   const isTyping = isUserTyping(selectedContact?._id);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  // Data preloading function
+  const preloadChatData = useCallback(
+    async (contact) => {
+      if (!contact?._id || !conversations?.data?.length) {
+        setShowContent(true);
+        return;
+      }
+
+      // Prevent multiple concurrent loads
+      if (isLoadingRef.current) return;
+
+      isLoadingRef.current = true;
+      setIsDataLoading(true);
+
+      try {
+        // Find conversation
+        const conversation = conversations.data.find((conv) =>
+          conv.participants.some(
+            (participants) => participants._id === contact._id
+          )
+        );
+
+        if (conversation) {
+          await fetchMessages(conversation._id);
+        }
+
+        // Add a small delay to prevent flickering
+        animationTimeoutRef.current = setTimeout(() => {
+          isLoadingRef.current = false;
+          setIsDataLoading(false);
+          setShowContent(true);
+        }, 150); // Reduced delay for smoother experience
+      } catch (error) {
+        console.error("Error preloading chat data:", error);
+        isLoadingRef.current = false;
+        setIsDataLoading(false);
+        setShowContent(true);
+      }
+    },
+    [conversations?.data, fetchMessages]
+  );
+
+  // Auto-load messages for selected contact on mount/reload (fixes reload issue)
+  useEffect(() => {
+    if (
+      selectedContact?._id &&
+      conversations?.data?.length > 0 &&
+      lastSelectedContactId === selectedContact._id &&
+      (!messages || messages.length === 0)
+    ) {
+      const conversationExists = conversations.data.some((conv) =>
+        conv.participants.some((p) => p._id === selectedContact._id)
+      );
+      if (conversationExists) {
+        setShowContent(false);
+        preloadChatData(selectedContact);
+      }
+    }
+    // No cleanup needed
+    // eslint-disable-next-line
+  }, [
+    selectedContact,
+    conversations,
+    lastSelectedContactId,
+    preloadChatData,
+    messages,
+  ]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   // Preload emoji data and pre-render the picker component
   useEffect(() => {
@@ -88,26 +211,92 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
   }, [theme]);
 
   useEffect(() => {
-    if (selectedContact?._id && conversations?.data?.length > 0) {
-      const conversation = conversations?.data?.find((conv) =>
-        conv.participants.some(
-          (participants) => participants._id === selectedContact._id
-        )
-      );
-      if (conversation) {
-        fetchMessages(conversation._id);
-      }
+    // Clear previous debounce timeout
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
     }
-  }, [selectedContact, conversations, fetchMessages]);
+
+    // Debounce the contact selection to prevent rapid switching issues
+    debounceTimeoutRef.current = setTimeout(() => {
+      // Only trigger loading if the contact actually changed
+      if (selectedContact?._id !== lastSelectedContactId) {
+        setLastSelectedContactId(selectedContact?._id || null);
+
+        // Clean up old optimistic messages when switching contacts
+        cleanupOldOptimisticMessages();
+
+        if (selectedContact?._id && conversations?.data?.length > 0) {
+          // Check if conversation exists for this contact
+          const conversationExists = conversations.data.some((conv) =>
+            conv.participants.some((p) => p._id === selectedContact._id)
+          );
+          if (conversationExists) {
+            setShowContent(false); // Show skeleton
+            preloadChatData(selectedContact);
+          } else {
+            // New conversation: clear messages and show content immediately
+            clearMessages();
+            setShowContent(true);
+          }
+        } else if (selectedContact?._id) {
+          // No conversations at all, clear messages
+          clearMessages();
+          setShowContent(true);
+        } else {
+          setShowContent(true);
+        }
+      }
+    }, 50); // 50ms debounce
+
+    // Cleanup animation timeout on contact change
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, [
+    selectedContact,
+    conversations,
+    clearMessages,
+    cleanupOldOptimisticMessages,
+    preloadChatData,
+    lastSelectedContactId,
+  ]);
 
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Smart scroll: only scroll to bottom if user is near the bottom, or on initial load
+  const scrollToBottom = (force = false) => {
+    const container = messagesEndRef.current?.parentNode;
+    if (!container) return;
+    const threshold = 150; // px from bottom to consider as "near bottom"
+    const isNearBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      threshold;
+    if (force || isNearBottom) {
+      // For flex-col-reverse, scrollTop=0 shows the latest message
+      container.scrollTop = 0;
+    }
   };
 
+  // On mount, always scroll to bottom
+  useEffect(() => {
+    scrollToBottom(true);
+  }, []);
+
+  // Scroll to bottom when selectedContact changes (e.g., navigating back to chat)
+  useEffect(() => {
+    if (selectedContact) {
+      scrollToBottom(true);
+    }
+  }, [selectedContact]);
+
+  // On messages update, only scroll if user is near bottom
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -158,10 +347,28 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
       if (!message.trim() && !selectedFile) {
         return;
       }
+
+      setMessage(""); // Clear input instantly after send
+
       await sendMessage(formData);
 
+      // After sending, update currentConversation if needed
+      await fetchConversations();
+      const updatedConversations = conversations?.data || [];
+      let conversation = updatedConversations.find((conv) =>
+        conv.participants.some((p) => p._id === selectedContact._id)
+      );
+
+      if (conversation) {
+        // Set the current conversation if it's different or if it wasn't set
+        if (conversation._id !== currentConversation) {
+          setChatStore({ currentConversation: conversation._id });
+          // Fetch messages for the conversation to ensure we have all messages
+          await fetchMessages(conversation._id);
+        }
+      }
+
       //clear state
-      setMessage("");
       setSelectedFile(null);
       setFilePreview(null);
       setShowFileMenu(false);
@@ -198,19 +405,31 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
 
   //group message
   const groupMessages = Array.isArray(messages)
-    ? messages.reduce((acc, message) => {
-        const date = new Date(message.createdAt);
-        if (isValidDate(date)) {
-          const dateString = format(date, "yyyy-MM-dd");
-          if (!acc[dateString]) {
-            acc[dateString] = [];
+    ? messages
+        .filter((msg) => {
+          // Include messages for current conversation OR optimistic messages for new conversations with current contact
+          return (
+            msg.conversation === currentConversation ||
+            (msg.isOptimistic &&
+              msg.isNewConversation &&
+              msg.sender._id === user._id &&
+              msg.receiver._id === selectedContact._id &&
+              msg.messageStatus !== "failed")
+          ); // Don't show failed optimistic messages
+        })
+        .reduce((acc, message) => {
+          const date = new Date(message.createdAt);
+          if (isValidDate(date)) {
+            const dateString = format(date, "yyyy-MM-dd");
+            if (!acc[dateString]) {
+              acc[dateString] = [];
+            }
+            acc[dateString].push(message);
+          } else {
+            console.warn("Invalid date in message:", message.createdAt);
           }
-          acc[dateString].push(message);
-        } else {
-          console.warn("Invalid date in message:", message.createdAt);
-        }
-        return acc;
-      }, {})
+          return acc;
+        }, {})
     : {};
 
   const handleReaction = (messageId, emoji) => {
@@ -306,6 +525,11 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
     );
   }
 
+  // Show skeleton loading during data preloading
+  if (selectedContact && !showContent && isDataLoading) {
+    return <SkeletonLoader theme={theme} />;
+  }
+
   return (
     <div className="flex-1 h-screen w-full flex flex-col">
       <div
@@ -317,10 +541,19 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
       >
         <button
           className="mr-2 focus:outline-none"
-          onClick={() => setSelectedContact(null)}
+          onClick={() => {
+            clearMessages();
+            cleanupOldOptimisticMessages();
+            setSelectedContact(null);
+            setShowContent(true);
+            setIsDataLoading(false);
+            setLastSelectedContactId(null);
+            isLoadingRef.current = false;
+          }}
         >
           <FaArrowLeft className="h-6 w-6" />
         </button>
+
         {selectedContact?.profilePicture ? (
           <img
             src={selectedContact?.profilePicture}
@@ -335,6 +568,7 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
             className="ml-3"
           />
         )}
+
         <div className=" ml-3 flex-grow">
           <h2 className="font-semibold text-start">
             {selectedContact?.username || user?.email || "User"}
@@ -365,34 +599,65 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
           </button>
         </div>
       </div>
+
       <div
         className={`flex-1 p-4 overflow-y-auto ${
           theme === "dark" ? "bg-[#191a1a]" : "bg-[rgb(241,236,229)]"
-        }`}
+        } flex flex-col-reverse`}
       >
-        {Object.entries(groupMessages).map(([date, msgs]) => (
-          <React.Fragment key={date}>
-            {renderDateSeparator(new Date(date))}
-            {msgs
-              .filter(
-                (msg) => msg.conversation === selectedContact?.conversation?._id
-              )
-              .map((msg) => (
-                <MessageBubble
-                  key={msg._id || msg.tempId}
-                  message={msg}
-                  theme={theme}
-                  currentUser={user}
-                  onReact={handleReaction}
-                  deleteMessage={deleteMessage}
-                  preRenderedPicker={preRenderedPicker}
-                  emojisLoaded={emojisLoaded}
-                />
-              ))}
-          </React.Fragment>
-        ))}
+        {messages &&
+        Array.isArray(messages) &&
+        messages.filter((msg) => {
+          // Show messages for current conversation OR optimistic messages for new conversations with current contact
+          return (
+            msg.conversation === currentConversation ||
+            (msg.isOptimistic &&
+              msg.isNewConversation &&
+              msg.sender._id === user._id &&
+              msg.receiver._id === selectedContact._id &&
+              msg.messageStatus !== "failed")
+          ); // Don't show failed optimistic messages
+        }).length > 0 ? (
+          [...Object.entries(groupMessages)]
+            .sort((a, b) => new Date(b[0]) - new Date(a[0])) // latest date first
+            .map(([date, msgs]) => (
+              <React.Fragment key={date}>
+                {[...msgs]
+                  .filter((msg) => {
+                    // Show messages for current conversation OR optimistic messages for new conversations with current contact
+                    return (
+                      msg.conversation === currentConversation ||
+                      (msg.isOptimistic &&
+                        msg.isNewConversation &&
+                        msg.sender._id === user._id &&
+                        msg.receiver._id === selectedContact._id &&
+                        msg.messageStatus !== "failed")
+                    ); // Don't show failed optimistic messages
+                  })
+                  .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) // latest message first
+                  .map((msg) => (
+                    <MessageBubble
+                      key={msg._id || msg.tempId}
+                      message={msg}
+                      theme={theme}
+                      currentUser={user}
+                      onReact={handleReaction}
+                      deleteMessage={deleteMessage}
+                      preRenderedPicker={preRenderedPicker}
+                      emojisLoaded={emojisLoaded}
+                    />
+                  ))}
+                {renderDateSeparator(new Date(date))}
+              </React.Fragment>
+            ))
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-gray-400 select-none">
+            No messages yet.
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
+
       {filePreview && (
         <div className="relative p-2">
           <img
@@ -411,9 +676,10 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
           </button>
         </div>
       )}
+
       <div
-        className={`p-4 ${
-          theme === "dark" ? "bg-[#303430]" : "bg-white"
+        className={`p-4 ${theme === "dark" ? "bg-[#303430]" : "bg-white"} ${
+          isMobile ? "pb-6" : ""
         } flex items-center space-x-2 relative`}
       >
         {/* Hidden div to preload and keep the emoji picker in DOM but not visible */}
@@ -525,14 +791,20 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
               ? "bg-gray-700 text-white border-gray-600"
               : "bg-white text-black border-gray-300"
           }`}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSendMessage();
+            }
+          }}
         />
         <button
           onClick={handleSendMessage}
-          className={`ml-2 p-3.5 rounded-full text-white ${
+          className={` p-2 border-2 rounded-md text-white ${
             theme === "dark" ? "bg-green-600" : "bg-green-500"
           } hover:bg-green-700 focus:outline-none`}
         >
-          <IoSend />
+          <IoSend size={15} />
         </button>
       </div>
     </div>

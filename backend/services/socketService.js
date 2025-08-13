@@ -15,7 +15,8 @@ const initializeSocket = (server) => {
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     },
-    pingTimeout: 60000, //Disconnect after 60 seconds of inactivity
+    pingInterval: 25000, // send ping every 25 seconds
+    pingTimeout: 60000, // disconnect if no pong within 60 seconds
   });
 
   // new connection established
@@ -48,6 +49,28 @@ const initializeSocket = (server) => {
             });
           }
         }
+
+        // --- NEW LOGIC: Mark undelivered messages as delivered and notify senders ---
+        const undeliveredMessages = await Message.find({
+          receiver: userId,
+          messageStatus: "sent",
+        });
+
+        await Message.updateMany(
+          { receiver: userId, messageStatus: "sent" },
+          { $set: { messageStatus: "delivered" } }
+        );
+
+        undeliveredMessages.forEach((msg) => {
+          const senderSocketId = onlineUsers.get(msg.sender.toString());
+          if (senderSocketId) {
+            io.to(senderSocketId).emit("message_status_update", {
+              messageId: msg._id,
+              messageStatus: "delivered",
+            });
+          }
+        });
+        // --- END NEW LOGIC ---
       } catch (error) {
         console.error("Error in user_connected:", error);
       }

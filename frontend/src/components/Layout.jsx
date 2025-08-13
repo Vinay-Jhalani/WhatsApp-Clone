@@ -46,7 +46,7 @@ const Layout = ({
       <div
         className={`flex-1 flex overflow-hidden ${isMobile ? "flex-col" : ""}`}
       >
-        <AnimatePresence initial={false}>
+        <AnimatePresence initial={true} mode="wait">
           {(!selectedContact || !isMobile) && (
             <motion.div
               key="chatlist"
@@ -54,28 +54,40 @@ const Layout = ({
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "tween" }}
-              className={`w-full md:w-2/5 h-full ${isMobile ? "pb-16" : ""}`}
+              className={`w-full md:w-2/5 h-full ${isMobile ? "" : ""}`}
             >
               {children}
             </motion.div>
           )}
           {(selectedContact || !isMobile) && (
-            <motion.div
-              key="chatWindow"
-              initial={{ x: isMobile ? "-100%" : 0 }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ type: "tween" }}
-              className={`w-full h-full ${isMobile ? "" : ""}`}
-            >
-              {
-                <ChatWindow
-                  selectedContact={selectedContact}
-                  setSelectedContact={setSelectedContact}
-                  isMobile={isMobile}
-                />
-              }
-            </motion.div>
+            // Only animate in ChatWindow when messages are loaded
+            <>
+              {selectedContact && isMobile && (
+                <motion.div
+                  key="chatWindow"
+                  initial={{ x: "-100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "-100%" }}
+                  transition={{ type: "tween" }}
+                  className={`w-full h-full absolute inset-0 flex items-center justify-center`}
+                >
+                  <ChatWindow
+                    selectedContact={selectedContact}
+                    setSelectedContact={setSelectedContact}
+                    isMobile={isMobile}
+                  />
+                </motion.div>
+              )}
+              {!isMobile && (
+                <div className="w-full h-full">
+                  <ChatWindow
+                    selectedContact={selectedContact}
+                    setSelectedContact={setSelectedContact}
+                    isMobile={isMobile}
+                  />
+                </div>
+              )}
+            </>
           )}
         </AnimatePresence>
       </div>

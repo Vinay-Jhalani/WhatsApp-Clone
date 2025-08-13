@@ -13,7 +13,8 @@ const Sidebar = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const { theme, toggleTheme } = useThemeStore();
   const { user } = useUserStore();
-  const { activeTab, setActiveTab, selectedContact } = useLayoutStore();
+  const { activeTab, setActiveTab, selectedContact, setSelectedContact } =
+    useLayoutStore();
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
@@ -49,6 +50,7 @@ const Sidebar = () => {
         className={`${isMobile ? "" : "mb-8"} ${
           activeTab === "chats" && "bg-gray-300 shadow-sm p-2 rounded-full"
         } focus:outline-none`}
+        onClick={() => setSelectedContact(null)}
       >
         <FaWhatsapp
           className={`h-6 w-6 ${

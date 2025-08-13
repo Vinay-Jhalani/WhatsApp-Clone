@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { getSocket } from "../services/chat.service";
-import axios from "axios";
 import axiosInstance from "../services/url.service";
 
 export const useChatStore = create((set, get) => ({
@@ -173,8 +172,20 @@ export const useChatStore = create((set, get) => ({
         `/chat/conversations/${conversationId}/messages`
       );
       const messageArray = data.data || data || [];
+
+      // Preserve optimistic messages and merge with fetched messages
+      const { messages: currentMessages } = get();
+      const optimisticMessages = currentMessages.filter(
+        (msg) =>
+          msg.isOptimistic &&
+          msg.messageStatus !== "failed" &&
+          !messageArray.some((fetchedMsg) => fetchedMsg._id === msg._id)
+      );
+
+      const mergedMessages = [...messageArray, ...optimisticMessages];
+
       set({
-        messages: messageArray,
+        messages: mergedMessages,
         currentConversation: conversationId,
         loading: false,
       });
@@ -193,7 +204,7 @@ export const useChatStore = create((set, get) => ({
         markMessagesAsRead();
       }
 
-      return messageArray;
+      return mergedMessages;
     } catch (error) {
       set({
         error: error?.response?.data?.message || error?.message,
@@ -213,6 +224,8 @@ export const useChatStore = create((set, get) => ({
     const socket = getSocket();
     const { conversations } = get();
     let conversationId = null;
+    let isNewConversation = false;
+
     if (conversations?.data?.length > 0) {
       const conversation = conversations.data.find(
         (conv) =>
@@ -222,19 +235,24 @@ export const useChatStore = create((set, get) => ({
       if (conversation) {
         conversationId = conversation._id;
         set({ currentConversation: conversationId });
+      } else {
+        isNewConversation = true;
       }
+    } else {
+      isNewConversation = true;
     }
 
     //temp message before actual response
     const tempId = `temp_${Date.now()}`;
     const optimisticMessage = {
       _id: tempId,
+      tempId, // Add tempId for easier tracking
       sender: { _id: senderId },
       receiver: { _id: receiverId },
       content,
       imageOrVideoUrl:
         media && typeof media !== "string" ? URL.createObjectURL(media) : null,
-      conversation: conversationId,
+      conversation: conversationId, // This will be null for new conversations
       contentType: media
         ? media.type.startsWith("image/")
           ? "image"
@@ -242,6 +260,8 @@ export const useChatStore = create((set, get) => ({
         : "text",
       createdAt: new Date(),
       messageStatus,
+      isOptimistic: true, // Flag to identify optimistic messages
+      isNewConversation, // Flag to track if this is a new conversation
     };
 
     set((state) => ({
@@ -261,15 +281,19 @@ export const useChatStore = create((set, get) => ({
       const messageData = data.data || data;
 
       // Emit the message through socket
-      const socket = getSocket();
       if (socket) {
         socket.emit("send_message", messageData);
+      }
+
+      // For new conversations, update currentConversation
+      if (isNewConversation && messageData.conversation) {
+        set({ currentConversation: messageData.conversation });
       }
 
       //replace optimistic message with actual response
       set((state) => ({
         messages: state.messages.map((msg) =>
-          msg._id === tempId ? messageData : msg
+          msg._id === tempId || msg.tempId === tempId ? messageData : msg
         ),
       }));
 
@@ -289,11 +313,20 @@ export const useChatStore = create((set, get) => ({
           conversations: { ...state.conversations, data: updateConversations },
         };
       });
+
+      // For new conversations, fetch updated conversations list
+      if (isNewConversation) {
+        setTimeout(() => {
+          get().fetchConversations();
+        }, 100);
+      }
     } catch (error) {
       console.error("Error sending message:", error);
       set((state) => ({
         messages: state.messages.map((msg) =>
-          msg._id === tempId ? { ...msg, messageStatus: "failed" } : msg
+          msg._id === tempId || msg.tempId === tempId
+            ? { ...msg, messageStatus: "failed", isOptimistic: false }
+            : msg
         ),
       }));
       set({ error: error?.response?.data?.message || error?.message });
@@ -303,7 +336,7 @@ export const useChatStore = create((set, get) => ({
 
   receiveMessage: (message) => {
     if (!message) return;
-    const { currentConversation, currentUser, messages } = get();
+    const { currentConversation, messages } = get();
 
     const messageExists = messages.some((msg) => msg._id === message._id);
     if (messageExists) return;
@@ -313,13 +346,8 @@ export const useChatStore = create((set, get) => ({
         messages: [...state.messages, message],
       }));
 
-      // If we're looking at the conversation right now, mark as read immediately
-      if (message.receiver?._id === currentUser?._id) {
-        // We're in the active conversation, so mark as read right away
-        setTimeout(() => {
-          get().markMessagesAsRead();
-        }, 500); // Small delay to ensure UI updates properly
-      }
+      // Don't automatically mark as read - let user interaction decide when to mark as read
+      // This prevents interference with backend unreadCount management
     }
 
     set((state) => {
@@ -506,5 +534,28 @@ export const useChatStore = create((set, get) => ({
       onlineUsers: new Map(),
       typingUsers: new Map(),
     });
+  },
+
+  clearMessages: () => set({ messages: [] }),
+
+  // Helper function to clean up optimistic messages for specific users
+  clearOptimisticMessages: (senderId, receiverId) => {
+    set((state) => ({
+      messages: state.messages.filter(
+        (msg) =>
+          !(
+            msg.isOptimistic &&
+            msg.sender._id === senderId &&
+            msg.receiver._id === receiverId
+          )
+      ),
+    }));
+  },
+
+  // Helper function to remove old optimistic messages when switching contacts
+  cleanupOldOptimisticMessages: () => {
+    set((state) => ({
+      messages: state.messages.filter((msg) => !msg.isOptimistic),
+    }));
   },
 }));

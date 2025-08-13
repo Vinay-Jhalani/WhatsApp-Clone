@@ -94,9 +94,21 @@ const ChatList = ({ contacts }) => {
     }
   }, [selectedContact, checkUserStatus]);
 
-  const filteredContacts = allContacts?.filter((contact) => {
-    return contact?.username?.toLowerCase().includes(searchTerms.toLowerCase());
-  });
+  const filteredContacts = allContacts
+    ?.filter((contact) => {
+      return contact?.username
+        ?.toLowerCase()
+        .includes(searchTerms.toLowerCase());
+    })
+    .sort((a, b) => {
+      const aTime = a?.conversation?.lastMessage?.createdAt
+        ? new Date(a.conversation.lastMessage.createdAt).getTime()
+        : 0;
+      const bTime = b?.conversation?.lastMessage?.createdAt
+        ? new Date(b.conversation.lastMessage.createdAt).getTime()
+        : 0;
+      return bTime - aTime;
+    });
 
   // Handle contact selection
   const handleContactSelect = (contact) => {
