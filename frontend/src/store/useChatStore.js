@@ -379,12 +379,13 @@ export const useChatStore = create((set, get) => ({
 
     if (!messages.length || !currentUser) return;
     // Only mark as read if the current user is the receiver of any unread messages
-    const unreadMessages = messages.filter(
-      (msg) =>
-        msg.messageStatus !== "read" && msg.receiver?._id === currentUser._id
-    );
-
-    const unreadIds = unreadMessages.map((msg) => msg._id).filter(Boolean);
+    const unreadIds = messages
+      .filter(
+        (msg) =>
+          msg.messageStatus !== "read" && msg.receiver?._id === currentUser._id
+      )
+      .map((msg) => msg._id)
+      .filter(Boolean);
 
     if (unreadIds.length === 0) return;
 
@@ -399,23 +400,9 @@ export const useChatStore = create((set, get) => ({
       }));
 
       const socket = getSocket();
-      if (socket && unreadMessages.length > 0) {
-        // Group unread messages by sender to emit correct events
-        const messagesBySender = unreadMessages.reduce((acc, msg) => {
-          const senderId = msg.sender?._id;
-          if (senderId) {
-            if (!acc[senderId]) {
-              acc[senderId] = [];
-            }
-            acc[senderId].push(msg._id);
-          }
-          return acc;
-        }, {});
-
-        // Emit read event for each sender
-        Object.entries(messagesBySender).forEach(([senderId, messageIds]) => {
-          socket.emit("message_read", messageIds, senderId);
-        });
+      // Only emit if the current user is the receiver
+      if (messages.some((msg) => msg.receiver?._id === currentUser._id)) {
+        socket.emit("message_read", unreadIds, messages[0]?.sender?._id);
       }
     } catch (error) {
       console.error("Error marking messages as read:", error);
