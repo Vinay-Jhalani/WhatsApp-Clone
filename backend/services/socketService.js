@@ -1,9 +1,10 @@
 import { Server } from "socket.io";
 import Message from "../models/Message.model.js";
 import User from "../models/User.model.js";
+import handleVideoService from "./videoCallService.js";
 
 // Storing online users in a map -> userId, socketId
-const onlineUsers = new Map();
+export const onlineUsers = new Map();
 
 //Map to track typing status -> userId -> [conversation] : boolean
 const typingUsers = new Map();
@@ -267,6 +268,9 @@ const initializeSocket = (server) => {
         }
       }
     );
+
+    //handle video call events
+    handleVideoService(socket, io, onlineUsers);
 
     // Handle disconnection
     const handleDisconnected = async () => {
