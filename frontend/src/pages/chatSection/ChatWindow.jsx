@@ -20,8 +20,6 @@ import Avatar from "../../components/Avatar";
 import MessageBubble from "./MessageBubble";
 import EmojiPicker from "emoji-picker-react";
 import SkeletonLoader from "../../components/SkeletonLoader";
-import { getSocket } from "../../services/chat.service";
-import CallManager from "../callsSection/CallManager";
 import useCallingStore from "../../store/useCallingStore";
 import { toast } from "sonner";
 
@@ -53,7 +51,6 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
 
   const { theme } = useThemeStore();
   const { user } = useUserStore();
-  const socket = getSocket();
 
   const {
     messages,
@@ -636,7 +633,6 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
             </div>
           </div>
         </div>
-        <CallManager socket={socket} />
       </>
     );
   }
@@ -934,7 +930,6 @@ const ChatWindow = ({ selectedContact, setSelectedContact }) => {
           </button>
         </div>
       </div>
-      <CallManager socket={socket} />
     </>
   );
 };

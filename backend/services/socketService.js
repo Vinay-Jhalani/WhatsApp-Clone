@@ -31,6 +31,7 @@ const initializeSocket = (server) => {
     socket.on("user_connected", async (connectingUserId) => {
       try {
         userId = connectingUserId;
+        socket.userId = connectingUserId;
         onlineUsers.set(userId, socket.id);
         socket.join(userId);
         await User.findByIdAndUpdate(userId, {

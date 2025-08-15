@@ -26,6 +26,12 @@ const CallManager = ({ socket }) => {
       callType,
       callId,
     }) => {
+      console.log(
+        "📱 FRONTEND: [MANAGER] Incoming call from:",
+        callerName,
+        "Type:",
+        callType
+      );
       setIncomingCall({ callerId, callerName, callerAvatar, callType, callId });
       setCallType(callType);
       setIsCallModelOpen(true);
@@ -33,6 +39,12 @@ const CallManager = ({ socket }) => {
     };
 
     const handleCallEnded = ({ callId, reason }) => {
+      console.log(
+        "📞 FRONTEND: [MANAGER] Call ended, ID:",
+        callId,
+        "Reason:",
+        reason
+      );
       setCallStatus("ended");
       setTimeout(() => {
         endCall();
@@ -60,6 +72,12 @@ const CallManager = ({ socket }) => {
   //Memoized function to initiate call
   const initiateCall = useCallback(
     ({ receiverId, receiverName, receiverAvatar, callType = "video" }) => {
+      console.log(
+        "📱 FRONTEND: [MANAGER] Initiating call to:",
+        receiverName,
+        "Type:",
+        callType
+      );
       const callId = `${user._id}-${receiverId}-${Date.now()}`;
       const callData = {
         callId,
@@ -73,6 +91,7 @@ const CallManager = ({ socket }) => {
       setIsCallModelOpen(true);
       setCallStatus("calling");
 
+      console.log("📡 FRONTEND: [MANAGER] Emitting initiate_call to server");
       //emit the call initiation event
       socket.emit("initiate_call", {
         callerId: user._id,

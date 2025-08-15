@@ -14,6 +14,8 @@ const useCallingStore = create(
     remoteStream: null,
     isVideoEnabled: true,
     isAudioEnabled: true,
+    isRemoteVideoEnabled: true,
+    isRemoteAudioEnabled: true,
 
     // webrtc
     peerConnection: null,
@@ -31,6 +33,10 @@ const useCallingStore = create(
     setRemoteStream: (stream) => set({ remoteStream: stream }),
     setIsVideoEnabled: (isEnabled) => set({ isVideoEnabled: isEnabled }),
     setIsAudioEnabled: (isEnabled) => set({ isAudioEnabled: isEnabled }),
+    setIsRemoteVideoEnabled: (isEnabled) =>
+      set({ isRemoteVideoEnabled: isEnabled }),
+    setIsRemoteAudioEnabled: (isEnabled) =>
+      set({ isRemoteAudioEnabled: isEnabled }),
     setPeerConnection: (pc) => set({ peerConnection: pc }),
     addIceCandidate: (candidate) =>
       set((state) => ({
@@ -58,24 +64,42 @@ const useCallingStore = create(
       }
     },
 
-    toggleVideo: () => {
-      const { localStream, isVideoEnabled } = get();
+    toggleVideo: (socket) => {
+      const { localStream, isVideoEnabled, peerConnection, currentCall } =
+        get();
       if (localStream) {
         const videoTrack = localStream.getVideoTracks()[0];
         if (videoTrack) {
           videoTrack.enabled = !isVideoEnabled;
           set({ isVideoEnabled: !isVideoEnabled });
+          // Notify the other user
+          if (peerConnection && currentCall && socket) {
+            socket.emit("media_status_change", {
+              type: "video",
+              enabled: !isVideoEnabled,
+              receiverId: currentCall.participantId,
+            });
+          }
         }
       }
     },
 
-    toggleAudio: () => {
-      const { localStream, isAudioEnabled } = get();
+    toggleAudio: (socket) => {
+      const { localStream, isAudioEnabled, peerConnection, currentCall } =
+        get();
       if (localStream) {
         const audioTrack = localStream.getAudioTracks()[0];
         if (audioTrack) {
           audioTrack.enabled = !isAudioEnabled;
           set({ isAudioEnabled: !isAudioEnabled });
+          // Notify the other user
+          if (peerConnection && currentCall && socket) {
+            socket.emit("media_status_change", {
+              type: "audio",
+              enabled: !isAudioEnabled,
+              receiverId: currentCall.participantId,
+            });
+          }
         }
       }
     },

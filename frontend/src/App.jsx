@@ -13,6 +13,8 @@ import Setting from "./pages/settingSection/Setting";
 import useUserStore from "./store/useUserStore";
 import SocketAndInternetManager from "./components/SocketAndInternetManager";
 import InternetOrSocketDisconnectUI from "./components/InternetOrSocketDisconnectUI";
+import CallManager from "./pages/callsSection/CallManager";
+import { getSocket } from "./services/chat.service";
 
 function App() {
   const { user } = useUserStore();
@@ -54,12 +56,18 @@ function App() {
                 path="/*"
                 element={
                   <ProtectedRoutes>
-                    <Routes>
-                      <Route path="/" element={<HomePage />} />
-                      <Route path="/user-profile" element={<UserDetails />} />
-                      <Route path="/status" element={<Status />} />
-                      <Route path="/settings" element={<Setting />} />
-                    </Routes>
+                    <>
+                      <Routes>
+                        <Route path="/" element={<HomePage />} />
+                        <Route path="/user-profile" element={<UserDetails />} />
+                        <Route path="/status" element={<Status />} />
+                        <Route path="/settings" element={<Setting />} />
+                      </Routes>
+                      {/* Global Call Manager - visible everywhere in the app */}
+                      {user?._id && !isInternetDisconnected && (
+                        <CallManager socket={getSocket()} />
+                      )}
+                    </>
                   </ProtectedRoutes>
                 }
               />

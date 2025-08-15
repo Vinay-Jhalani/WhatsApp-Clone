@@ -3,9 +3,21 @@ const handleVideoService = (socket, io, onlineUsers) => {
   socket.on(
     "initiate_call",
     async ({ callerId, receiverId, callType, callerInfo }) => {
+      console.log(
+        "📡 BACKEND: Received initiate_call from:",
+        callerId,
+        "to:",
+        receiverId,
+        "type:",
+        callType
+      );
       const receiverSocketId = onlineUsers.get(receiverId);
       if (receiverSocketId) {
         const callId = `${callerId}-${receiverId}-${Date.now()}`;
+        console.log(
+          "📱 BACKEND: Receiver is online, forwarding call_initiated to receiver socket:",
+          receiverSocketId
+        );
         io.to(receiverSocketId).emit("call_initiated", {
           callerId,
           callerName: callerInfo?.username,
@@ -15,7 +27,7 @@ const handleVideoService = (socket, io, onlineUsers) => {
         });
       } else {
         // Handle case where receiver is not online
-        console.log(`server: Receiver ${receiverId} is not online`);
+        console.log(`🔴 BACKEND: Receiver ${receiverId} is not online`);
         socket.emit("call_failed", { reason: "user is offline" });
       }
     }
@@ -23,8 +35,18 @@ const handleVideoService = (socket, io, onlineUsers) => {
 
   // Answer call
   socket.on("accept_call", ({ callerId, callId, receiverId }) => {
+    console.log(
+      "✅ BACKEND: Received accept_call from:",
+      receiverId,
+      "to caller:",
+      callerId
+    );
     const callerSocketId = onlineUsers.get(callerId);
     if (callerSocketId) {
+      console.log(
+        "📞 BACKEND: Forwarding call_accepted to caller socket:",
+        callerSocketId
+      );
       socket.to(callerSocketId).emit("call_accepted", {
         callId,
         callerName: receiverId?.username,
@@ -32,7 +54,7 @@ const handleVideoService = (socket, io, onlineUsers) => {
       });
     } else {
       // Handle case where caller is not online
-      console.log(`server: Caller ${callerId} is not online`);
+      console.log(`🔴 BACKEND: Caller ${callerId} is not online`);
     }
   });
 
@@ -63,45 +85,87 @@ const handleVideoService = (socket, io, onlineUsers) => {
 
   // WebRTC signaling event
   socket.on("webrtc_offer", ({ offer, receiverId, callId }) => {
+    console.log(
+      "🔵 BACKEND: Received webrtc_offer from caller to:",
+      receiverId
+    );
+    console.log("🔵 BACKEND: Socket.userId:", socket.userId); // Debugging line
     const receiverSocketId = onlineUsers.get(receiverId);
     if (receiverSocketId) {
+      console.log(
+        "🔵 BACKEND: Forwarding webrtc_offer to receiver socket:",
+        receiverSocketId
+      );
       socket.to(receiverSocketId).emit("webrtc_offer", {
         offer,
         senderId: socket.userId,
         callId,
       });
-      console.log(`server offer forwarded to Receiver: ${receiverId}`);
+      console.log(`🔵 BACKEND: Offer forwarded to Receiver: ${receiverId}`);
     } else {
-      console.log(`server: Receiver ${receiverId} is not online`);
+      console.log(`🔴 BACKEND: Receiver ${receiverId} is not online`);
     }
   });
 
   // WebRTC answer event
   socket.on("webrtc_answer", ({ answer, receiverId, callId }) => {
+    console.log(
+      "🟢 BACKEND: Received webrtc_answer from receiver to:",
+      receiverId
+    );
+    console.log("🟢 BACKEND: Socket.userId:", socket.userId); // Debugging line
     const receiverSocketId = onlineUsers.get(receiverId);
     if (receiverSocketId) {
+      console.log(
+        "🟢 BACKEND: Forwarding webrtc_answer to caller socket:",
+        receiverSocketId
+      );
       socket.to(receiverSocketId).emit("webrtc_answer", {
         answer,
-        receiverId: socket.userId,
+        senderId: socket.userId,
         callId,
       });
-      console.log(`server answer forwarded to Caller: ${receiverId}`);
+      console.log(`🟢 BACKEND: Answer forwarded to Caller: ${receiverId}`);
     } else {
-      console.log(`server: Caller ${receiverId} is not online`);
+      console.log(`🔴 BACKEND: Caller ${receiverId} is not online`);
     }
   });
 
   // WebRTC ICE candidate event
   socket.on("webrtc_ice_candidate", ({ candidate, receiverId, callId }) => {
+    console.log("🧊 BACKEND: Received ICE candidate for:", receiverId);
+    console.log("🧊 BACKEND: Socket.userId:", socket.userId); // Debugging line
     const receiverSocketId = onlineUsers.get(receiverId);
     if (receiverSocketId) {
+      console.log(
+        "🧊 BACKEND: Forwarding ICE candidate to socket:",
+        receiverSocketId
+      );
       socket.to(receiverSocketId).emit("webrtc_ice_candidate", {
         candidate,
-        receiverId: socket.userId,
+        senderId: socket.userId,
         callId,
       });
     } else {
-      console.log(`server: Receiver ${receiverId} not found for ICE candidate`);
+      console.log(
+        `🔴 BACKEND: Receiver ${receiverId} not found for ICE candidate`
+      );
+    }
+  });
+
+  // media status change event
+  socket.on("media_status_change", ({ type, enabled, receiverId }) => {
+    console.log(
+      `[MEDIA STATUS] Received from ${socket.userId}: ${type} -> ${enabled}`
+    );
+    const receiverSocketId = onlineUsers.get(receiverId);
+    if (receiverSocketId) {
+      socket.to(receiverSocketId).emit("media_status_change", {
+        type,
+        enabled,
+        senderId: socket.userId,
+      });
+      console.log(`[MEDIA STATUS] Forwarded to ${receiverId}`);
     }
   });
 };
