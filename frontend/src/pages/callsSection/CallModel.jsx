@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion as Motion, AnimatePresence } from "framer-motion";
 import {
   FaMicrophone as Mic,
   FaMicrophoneSlash as MicOff,
@@ -13,6 +13,7 @@ import {
 } from "react-icons/fa";
 import useCallingStore from "../../store/useCallingStore";
 import useUserStore from "../../store/useUserStore";
+import Avatar from "../../components/Avatar";
 import mediaService from "../../services/mediaService";
 import WindowedCallUI from "./WindowedCallUI";
 
@@ -128,6 +129,56 @@ const CallModel = ({ socket }) => {
       remoteVideoRef.current.srcObject = remoteStream;
     }
   }, [remoteStream, isRemoteVideoEnabled, isFullscreen]);
+
+  // Track call start time without using React state to avoid re-renders/flicker.
+  const callStartRef = useRef(null);
+
+  const formatElapsed = (ms) => {
+    if (!ms || ms < 0) return "00:00";
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60)
+      .toString()
+      .padStart(2, "0");
+    const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+    return `${minutes}:${seconds}`;
+  };
+
+  // getCallDuration kept out of render to avoid accidental usage causing re-renders;
+  // use <span data-call-duration> for live updates handled by effect above.
+
+  // Update callStartRef when call status changes and update DOM nodes directly
+  useEffect(() => {
+    let interval = null;
+
+    const updateAllDurationNodes = () => {
+      const text = callStartRef.current
+        ? formatElapsed(Date.now() - callStartRef.current)
+        : "00:00";
+      document.querySelectorAll("[data-call-duration]").forEach((el) => {
+        if (el && el.innerText !== text) el.innerText = text;
+      });
+    };
+
+    if (callStatus === "connected") {
+      // start timer if not already started
+      if (!callStartRef.current) callStartRef.current = Date.now();
+      // immediate update and then every second
+      updateAllDurationNodes();
+      interval = setInterval(updateAllDurationNodes, 1000);
+    } else {
+      // stop timer and reset
+      callStartRef.current = null;
+      // Ensure nodes show initial value (status text will be used elsewhere)
+      document.querySelectorAll("[data-call-duration]").forEach((el) => {
+        if (el) el.innerText = "00:00";
+      });
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+    // only care when call status changes
+  }, [callStatus]);
 
   //initialize media stream using shared media service
   const initializeMedia = async (video = true) => {
@@ -695,19 +746,25 @@ const CallModel = ({ socket }) => {
 
   const isVideoCall = callType === "video";
 
-  // Get call duration (you can implement a timer for this)
-  const getCallDuration = () => {
-    // Placeholder for call duration logic
-    return "00:00";
-  };
-
   // Show incoming call screen
   if (incomingCall && !isCallActive) {
     return (
       <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center">
         <div className="bg-gray-900 rounded-2xl p-8 text-center text-white max-w-md w-full mx-4">
-          <div className="w-32 h-32 bg-gray-600 rounded-full flex items-center justify-center text-4xl font-bold mx-auto mb-4">
-            {displayInfo.name?.charAt(0)?.toUpperCase() || "U"}
+          <div className="w-32 h-32 mx-auto mb-4">
+            {displayInfo.avatar ? (
+              <img
+                src={displayInfo.avatar}
+                alt={displayInfo.name}
+                className="w-32 h-32 rounded-full object-cover"
+              />
+            ) : (
+              <Avatar
+                name={displayInfo.name}
+                size="w-32 h-32"
+                textSize="text-4xl"
+              />
+            )}
           </div>
           <h2 className="text-2xl font-bold mb-2">{displayInfo.name}</h2>
           <p className="text-gray-400 mb-8">
@@ -739,7 +796,6 @@ const CallModel = ({ socket }) => {
       <WindowedCallUI
         displayInfo={displayInfo}
         callStatus={callStatus}
-        getCallDuration={getCallDuration}
         isVideoCall={isVideoCall}
         isRemoteVideoEnabled={isRemoteVideoEnabled}
         remoteStream={remoteStream}
@@ -747,6 +803,8 @@ const CallModel = ({ socket }) => {
         localStream={localStream}
         isAudioEnabled={isAudioEnabled}
         isRemoteAudioEnabled={isRemoteAudioEnabled}
+        localName={user?.username}
+        localAvatar={user?.profilePicture}
         onToggleAudio={() => toggleAudio(socket)}
         onToggleVideo={() => toggleVideo(socket)}
         onEndCall={handleEndCall}
@@ -777,22 +835,36 @@ const CallModel = ({ socket }) => {
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
-            <div className="w-32 h-32 text-4xl bg-gray-600 rounded-full flex items-center justify-center font-bold mb-4">
-              {displayInfo.name?.charAt(0)?.toUpperCase() || "U"}
+            <div className="w-32 h-32 mb-4">
+              {displayInfo.avatar ? (
+                <img
+                  src={displayInfo.avatar}
+                  alt={displayInfo.name}
+                  className="w-32 h-32 rounded-full object-cover"
+                />
+              ) : (
+                <Avatar
+                  name={displayInfo.name}
+                  size="w-32 h-32"
+                  textSize="text-4xl"
+                />
+              )}
             </div>
             <h2 className="text-2xl font-bold mb-2">{displayInfo.name}</h2>
             <p className="text-gray-400 text-base">
-              {callStatus === "calling"
-                ? "Calling..."
-                : callStatus === "connected"
-                ? getCallDuration()
-                : callStatus === "rejected"
-                ? "Call rejected"
-                : callStatus === "failed"
-                ? "Call failed"
-                : callStatus === "ended"
-                ? "Call ended"
-                : callStatus}
+              {callStatus === "calling" ? (
+                "Calling..."
+              ) : callStatus === "connected" ? (
+                <span data-call-duration>00:00</span>
+              ) : callStatus === "rejected" ? (
+                "Call rejected"
+              ) : callStatus === "failed" ? (
+                "Call failed"
+              ) : callStatus === "ended" ? (
+                "Call ended"
+              ) : (
+                callStatus
+              )}
             </p>
           </div>
         )}
@@ -823,8 +895,8 @@ const CallModel = ({ socket }) => {
         )}
 
         {/* Local self-view (bottom-right) */}
-        {isVideoCall && isVideoEnabled && localStream && (
-          <motion.div
+        {isVideoCall && (
+          <Motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="absolute bottom-28 right-6 w-52 aspect-video rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-black/30 backdrop-blur"
@@ -839,9 +911,22 @@ const CallModel = ({ socket }) => {
               autoPlay
               playsInline
               muted
-              className="h-full w-full object-cover scale-x-[-1]"
+              className={`h-full w-full object-cover scale-x-[-1] transition-opacity duration-200 ${
+                isVideoEnabled && localStream ? "opacity-100" : "opacity-0"
+              }`}
             />
-          </motion.div>
+
+            {/* Fallback avatar when local preview not available */}
+            {!(isVideoEnabled && localStream) && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                <Avatar
+                  name={user?.username || "You"}
+                  size="w-24 h-24"
+                  textSize="text-lg"
+                />
+              </div>
+            )}
+          </Motion.div>
         )}
 
         {/* Call Info for Video */}
@@ -849,7 +934,11 @@ const CallModel = ({ socket }) => {
           <div className="absolute top-4 left-4 text-white z-10">
             <p className="font-bold text-lg">{displayInfo.name}</p>
             <p className="text-sm opacity-80">
-              {callStatus === "connected" ? getCallDuration() : callStatus}
+              {callStatus === "connected" ? (
+                <span data-call-duration>00:00</span>
+              ) : (
+                callStatus
+              )}
             </p>
           </div>
         )}
@@ -916,7 +1005,7 @@ const CallModel = ({ socket }) => {
         {/* Meet-like overlay while in PiP */}
         <AnimatePresence>
           {isPiPActive && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -942,7 +1031,7 @@ const CallModel = ({ socket }) => {
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </Motion.div>
           )}
         </AnimatePresence>
       </div>

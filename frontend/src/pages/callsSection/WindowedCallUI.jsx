@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { motion as Motion } from "framer-motion";
+import Avatar from "../../components/Avatar";
 import {
   FaExpand,
   FaCompress,
@@ -13,7 +14,6 @@ import {
 const WindowedCallUI = ({
   displayInfo,
   callStatus,
-  getCallDuration,
   isVideoCall,
   isRemoteVideoEnabled,
   remoteStream,
@@ -27,6 +27,8 @@ const WindowedCallUI = ({
   onToggleFullscreen,
   localVideoRef,
   remoteVideoRef,
+  localName,
+  localAvatar,
 }) => {
   // Internal refs as fallback if none provided
   const internalRemoteRef = useRef(null);
@@ -101,24 +103,38 @@ const WindowedCallUI = ({
                 : "opacity-100"
             }`}
           >
-            <div className="w-20 h-20 bg-gray-600 rounded-full flex items-center justify-center text-2xl font-bold mb-4">
-              {displayInfo.name?.charAt(0)?.toUpperCase() || "U"}
+            <div className="w-20 h-20 mb-4">
+              {displayInfo.avatar ? (
+                <img
+                  src={displayInfo.avatar}
+                  alt={displayInfo.name}
+                  className="w-20 h-20 rounded-full object-cover"
+                />
+              ) : (
+                <Avatar
+                  name={displayInfo.name}
+                  size="w-20 h-20"
+                  textSize="text-2xl"
+                />
+              )}
             </div>
             <h2 className="text-lg font-bold mb-2 text-white">
               {displayInfo.name}
             </h2>
             <p className="text-gray-400 text-sm">
-              {callStatus === "calling"
-                ? "Calling..."
-                : callStatus === "connected"
-                ? getCallDuration()
-                : callStatus === "rejected"
-                ? "Call rejected"
-                : callStatus === "failed"
-                ? "Call failed"
-                : callStatus === "ended"
-                ? "Call ended"
-                : callStatus}
+              {callStatus === "calling" ? (
+                "Calling..."
+              ) : callStatus === "connected" ? (
+                <span data-call-duration>00:00</span>
+              ) : callStatus === "rejected" ? (
+                "Call rejected"
+              ) : callStatus === "failed" ? (
+                "Call failed"
+              ) : callStatus === "ended" ? (
+                "Call ended"
+              ) : (
+                callStatus
+              )}
             </p>
           </div>
         </div>
@@ -145,7 +161,7 @@ const WindowedCallUI = ({
 
         {/* Local Video Preview */}
         {/* Local Video Preview: keep mounted and hide when not needed */}
-        <div className="absolute bottom-20 right-4 w-24 h-32 max-w-[30%] max-h-[30%] rounded-lg overflow-hidden border-2 border-white shadow-lg">
+        <div className="absolute bottom-20 right-4 w-24 h-32 max-w-[30%] max-h-[30%] rounded-lg overflow-hidden border-2 border-white shadow-lg bg-black">
           <video
             ref={(el) => {
               if (localVideoRef) {
@@ -157,12 +173,31 @@ const WindowedCallUI = ({
             autoPlay
             playsInline
             muted
-            className={`w-full h-full object-cover scale-x-[-1] ${
+            className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-200 ${
               isVideoCall && isVideoEnabled && localStream
                 ? "opacity-100"
                 : "opacity-0"
             }`}
           />
+
+          {/* Fallback avatar when local video isn't available */}
+          {!(isVideoCall && isVideoEnabled && localStream) && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+              {localAvatar ? (
+                <img
+                  src={localAvatar}
+                  alt={localName}
+                  className="w-20 h-20 rounded-full object-cover"
+                />
+              ) : (
+                <Avatar
+                  name={localName || "You"}
+                  size="w-20 h-20"
+                  textSize="text-2xl"
+                />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Call Info */}
@@ -170,7 +205,11 @@ const WindowedCallUI = ({
           <div className="absolute top-3 left-4 text-white z-10">
             <p className="font-bold text-sm">{displayInfo.name}</p>
             <p className="text-xs opacity-80">
-              {callStatus === "connected" ? getCallDuration() : callStatus}
+              {callStatus === "connected" ? (
+                <span data-call-duration>00:00</span>
+              ) : (
+                callStatus
+              )}
             </p>
           </div>
         )}
