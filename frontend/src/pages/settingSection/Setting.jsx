@@ -53,7 +53,7 @@ const Setting = () => {
         }`}
       >
         <div
-          className={`max-w-[400px] w-full mx-auto h-full overflow-y-auto ${
+          className={`w-full mx-auto h-full overflow-y-auto ${
             theme === "dark" ? "border-gray-600" : "border-gray-200"
           }`}
         >
@@ -89,12 +89,20 @@ const Setting = () => {
             >
               <div className="flex items-center mb-4">
                 <div className="mr-3">
-                  <Avatar
-                    name={user?.username}
-                    size="w-12 h-12"
-                    textSize="text-lg"
-                    className="shadow-md"
-                  />
+                  {user?.profilePicture ? (
+                    <img
+                      src={user.profilePicture}
+                      alt={user.username}
+                      className="w-12 h-12 rounded-full object-cover shadow-md"
+                    />
+                  ) : (
+                    <Avatar
+                      name={user?.username}
+                      size="w-12 h-12"
+                      textSize="text-lg"
+                      className="shadow-md"
+                    />
+                  )}
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold">Profile</h2>

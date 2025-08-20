@@ -40,6 +40,37 @@ const StatusPreview = ({
   const isImage = currentStatus?.contentType === "image";
   const isText = currentStatus?.contentType === "text";
 
+  const [likes, setLikes] = useState([]);
+
+  useEffect(() => {
+    // Trigger first like instantly
+    const firstId = Date.now();
+    setLikes((prev) => [
+      ...prev,
+      {
+        id: firstId,
+        emoji: <div className="drop-shadow-lg  drop-shadow-black/15">❤️</div>,
+      },
+    ]);
+
+    // Then continue with interval for subsequent likes
+    const interval = setInterval(() => {
+      const id = Date.now(); // ensure unique id
+      setLikes((prev) => [
+        ...prev,
+        {
+          id,
+          emoji: <div className="drop-shadow-lg drop-shadow-black/15">❤️</div>,
+        },
+      ]);
+    }, 1500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const removeLike = (id) => {
+    setLikes((prev) => prev.filter((like) => like.id !== id));
+  };
+
   // Progress bar animation
   useEffect(() => {
     if (!isPlaying || !currentStatus) return;
@@ -148,6 +179,27 @@ const StatusPreview = ({
     });
     return null;
   }
+
+  const FloatingLike = ({ id, emoji, onComplete }) => {
+    return (
+      <motion.div
+        key={id}
+        initial={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
+        animate={{
+          opacity: 0,
+          y: -200,
+          scale: 1.2,
+          rotate: [0, 10, -10, 10, -10, 0],
+        }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 2, ease: "easeInOut" }}
+        className="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-3xl pointer-events-none"
+        onAnimationComplete={onComplete}
+      >
+        {emoji}
+      </motion.div>
+    );
+  };
 
   return (
     <AnimatePresence>
@@ -349,6 +401,22 @@ const StatusPreview = ({
             </button>
           </div>
         )}
+        {isOwner &&
+          currentStatus?.viewers?.length > 0 &&
+          currentStatus?.likedBy?.length > 0 && (
+            <div className="absolute bottom-10 right-10">
+              <AnimatePresence>
+                {likes.map(({ id, emoji }) => (
+                  <FloatingLike
+                    key={id}
+                    id={id}
+                    emoji={emoji}
+                    onComplete={() => removeLike(id)}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
 
         {/* Viewers modal */}
         <AnimatePresence>
