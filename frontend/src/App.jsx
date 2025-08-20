@@ -18,6 +18,8 @@ import { getSocket } from "./services/chat.service";
 
 function App() {
   const { user } = useUserStore();
+  // ...existing code...
+  // Socket initialization and listeners are now handled in SocketAndInternetManager.jsx
   return (
     <SocketAndInternetManager user={user}>
       {({

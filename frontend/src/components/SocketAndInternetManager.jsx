@@ -1,9 +1,14 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { disconnectSocket, initializeSocket } from "../services/chat.service";
 import { useChatStore } from "../store/useChatStore";
+import useStatusStore from "../store/useStatusStore";
 
 const useSocketAndInternet = (user) => {
   const { setCurrentUser, initializeSocketListeners, cleanup } = useChatStore();
+  const {
+    initializeSocket: initializeStatusListeners,
+    cleanupSocket: cleanupStatusSocket,
+  } = useStatusStore.getState();
   const [isDisconnected, setIsDisconnected] = useState(false);
   const [isInternetDisconnected, setIsInternetDisconnected] = useState(
     !navigator.onLine
@@ -18,6 +23,7 @@ const useSocketAndInternet = (user) => {
       if (socket) {
         setCurrentUser(user);
         initializeSocketListeners();
+        initializeStatusListeners();
         socket.on("disconnect", () => {
           setIsDisconnected(true);
         });
@@ -28,6 +34,7 @@ const useSocketAndInternet = (user) => {
     }
     return () => {
       cleanup();
+      cleanupStatusSocket();
       disconnectSocket();
       if (socket) {
         socket.off("disconnect");
@@ -40,6 +47,8 @@ const useSocketAndInternet = (user) => {
     initializeSocketListeners,
     cleanup,
     isInternetDisconnected,
+    initializeStatusListeners,
+    cleanupStatusSocket,
   ]);
 
   // Track internet connection status
@@ -71,6 +80,7 @@ const useSocketAndInternet = (user) => {
       if (socket) {
         setCurrentUser(user);
         initializeSocketListeners();
+        initializeStatusListeners();
         socket.once("connect", () => {
           setIsDisconnected(false);
           setIsReconnecting(false);
@@ -82,7 +92,12 @@ const useSocketAndInternet = (user) => {
         setIsReconnecting(false);
       }
     }, 500);
-  }, [user, setCurrentUser, initializeSocketListeners]);
+  }, [
+    user,
+    setCurrentUser,
+    initializeSocketListeners,
+    initializeStatusListeners,
+  ]);
 
   return {
     isDisconnected,

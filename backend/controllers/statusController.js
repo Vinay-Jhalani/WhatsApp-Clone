@@ -4,9 +4,11 @@ import response from "../utils/responseHandler.js";
 
 const createStatus = async (req, res) => {
   try {
-    const { content, contentType = "text" } = req.body;
+    const { content, backgroundColor, caption } = req.body;
+    let contentType = "text";
     const userId = req.userId;
     const file = req.file;
+
     if (!content && !file) {
       return response(res, 400, "Content is missing");
     }
@@ -34,25 +36,45 @@ const createStatus = async (req, res) => {
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    const status = new Status({
+    const statusData = {
       user: userId,
       content: mediaUrl || content,
       contentType,
       expiresAt,
-    });
+    };
+
+    // Add backgroundColor for text statuses
+    if (contentType === "text" && backgroundColor) {
+      statusData.backgroundColor = backgroundColor;
+    }
+
+    // Add caption for media statuses
+    if ((contentType === "image" || contentType === "video") && caption) {
+      statusData.caption = caption;
+    }
+
+    const status = new Status(statusData);
 
     await status.save();
 
     const populatedStatus = await Status.findById(status._id)
-      .populate("user", "name profilePicture")
-      .populate("viewers", "name profilePicture")
-      .populate("likedBy", "name profilePicture");
+      .populate("user", "username profilePicture")
+      .populate("viewers", "username profilePicture")
+      .populate("likedBy", "username profilePicture");
 
     //emit socket event to notify status creation
     if (req.io && req.socketUserMap) {
+      console.log(
+        "[DEBUG] Emitting new_status. socketUserMap:",
+        Array.from(req.socketUserMap.entries())
+      );
       //broadcast to all connecting users except the creator
       for (const [connectedUserId, socketId] of req.socketUserMap) {
+        console.log(
+          `[DEBUG] Checking user ${connectedUserId} (socket ${socketId}) for new_status`
+        );
         if (connectedUserId !== userId) {
+          console.log(`[DEBUG] Emitting new_status to socket ${socketId}`);
           req.io.to(socketId).emit("new_status", populatedStatus);
         }
       }
@@ -68,13 +90,13 @@ const createStatus = async (req, res) => {
 const getStatus = async (req, res) => {
   try {
     const userId = req.userId;
+    // Fetch ALL statuses from ALL users that haven't expired
     const statuses = await Status.find({
-      user: userId,
       expiresAt: { $gt: new Date() },
     })
-      .populate("user", "name profilePicture")
-      .populate("viewers", "name profilePicture")
-      .populate("likedBy", "name profilePicture")
+      .populate("user", "username profilePicture")
+      .populate("viewers", "username profilePicture")
+      .populate("likedBy", "username profilePicture")
       .sort({ createdAt: -1 });
 
     return response(res, 200, "Statuses retrieved successfully", statuses);
@@ -106,14 +128,22 @@ const viewStatus = async (req, res) => {
 
       // Build query for updated status
       const updatedStatus = await Status.findById(status._id)
-        .populate("user", "name profilePicture")
-        .populate("viewers", "name profilePicture")
-        .populate("likedBy", "name profilePicture");
+        .populate("user", "username profilePicture")
+        .populate("viewers", "username profilePicture")
+        .populate("likedBy", "username profilePicture");
 
-      // 🎯 SOCKET NOTIFICATION - Only when someone NEW views the status
+      // 🎯 SOCKET NOTIFICATION - Only to status owner
       if (req.io && req.socketUserMap) {
+        console.log(
+          "[DEBUG] Emitting status_viewed. socketUserMap:",
+          Array.from(req.socketUserMap.entries())
+        );
         const statusOwnerSocketId = req.socketUserMap.get(
           status.user._id.toString()
+        );
+        console.log(
+          `[DEBUG] statusOwnerSocketId for user ${status.user._id}:`,
+          statusOwnerSocketId
         );
         if (statusOwnerSocketId) {
           const viewData = {
@@ -122,6 +152,9 @@ const viewStatus = async (req, res) => {
             totalViews: updatedStatus.viewers.length,
             viewers: updatedStatus.viewers,
           };
+          console.log(
+            `[DEBUG] Emitting status_viewed to socket ${statusOwnerSocketId}`
+          );
           req.io.to(statusOwnerSocketId).emit("status_viewed", viewData);
         }
       }
@@ -132,14 +165,14 @@ const viewStatus = async (req, res) => {
     // Build base query with basic population
     let query = Status.findById(status._id).populate(
       "user",
-      "name profilePicture"
+      "username profilePicture"
     );
 
     // If owner, include viewers and likedBy
     if (isOwner) {
       query = query
-        .populate("viewers", "name profilePicture")
-        .populate("likedBy", "name profilePicture");
+        .populate("viewers", "username profilePicture")
+        .populate("likedBy", "username profilePicture");
     }
 
     const updatedStatus = await query;
@@ -161,28 +194,81 @@ const likeStatus = async (req, res) => {
   const { statusId } = req.params;
   const userId = req.userId;
 
+  console.log("[DEBUG] likeStatus called", { statusId, userId });
   try {
     const status = await Status.findById(statusId);
+    console.log("[DEBUG] Status found:", status);
     if (!status) {
+      console.log("[DEBUG] Status not found for id:", statusId);
       return response(res, 404, "Status not found");
     }
 
     const hasLiked = status.likedBy.some(
       (likedUserId) => likedUserId.toString() === userId.toString()
     );
+    console.log("[DEBUG] hasLiked:", hasLiked);
 
+    let populatedStatus;
     if (hasLiked) {
       // If already liked, remove like
       status.likedBy = status.likedBy.filter(
         (likedUserId) => likedUserId.toString() !== userId.toString()
       );
       await status.save();
-      return response(res, 200, "Status unliked successfully", status);
+      populatedStatus = await Status.findById(status._id)
+        .populate("user", "username profilePicture")
+        .populate("viewers", "username profilePicture")
+        .populate("likedBy", "username profilePicture");
+      console.log("[DEBUG] Status unliked, populatedStatus:", populatedStatus);
+      // Emit socket event for unliking status
+      if (req.io && req.socketUserMap) {
+        console.log(
+          "[DEBUG] Emitting status_liked. socketUserMap:",
+          Array.from(req.socketUserMap.entries())
+        );
+        for (const [connectedUserId, socketId] of req.socketUserMap) {
+          console.log(
+            `[DEBUG] Checking user ${connectedUserId} (socket ${socketId}) for status_liked`
+          );
+          if (connectedUserId !== userId) {
+            console.log(`[DEBUG] Emitting status_liked to socket ${socketId}`);
+            req.io.to(socketId).emit("status_liked", {
+              statusId: status._id,
+              likedBy: populatedStatus.likedBy,
+            });
+          }
+        }
+      }
+      return response(res, 200, "Status unliked successfully", populatedStatus);
     } else {
       // If not liked, add like
       status.likedBy.push(userId);
       await status.save();
-      return response(res, 200, "Status liked successfully", status);
+      populatedStatus = await Status.findById(status._id)
+        .populate("user", "username profilePicture")
+        .populate("viewers", "username profilePicture")
+        .populate("likedBy", "username profilePicture");
+      console.log("[DEBUG] Status liked, populatedStatus:", populatedStatus);
+      // Emit socket event for liking status
+      if (req.io && req.socketUserMap) {
+        console.log(
+          "[DEBUG] Emitting status_liked. socketUserMap:",
+          Array.from(req.socketUserMap.entries())
+        );
+        for (const [connectedUserId, socketId] of req.socketUserMap) {
+          console.log(
+            `[DEBUG] Checking user ${connectedUserId} (socket ${socketId}) for status_liked`
+          );
+          if (connectedUserId !== userId) {
+            console.log(`[DEBUG] Emitting status_liked to socket ${socketId}`);
+            req.io.to(socketId).emit("status_liked", {
+              statusId: status._id,
+              likedBy: populatedStatus.likedBy,
+            });
+          }
+        }
+      }
+      return response(res, 200, "Status liked successfully", populatedStatus);
     }
   } catch (error) {
     console.error("Error liking status:", error);
@@ -197,6 +283,17 @@ const deleteStatus = async (req, res) => {
 
     try {
       const status = await Status.findById(statusId);
+      // Emit socket event for liking status
+      if (req.io && req.socketUserMap) {
+        for (const [connectedUserId, socketId] of req.socketUserMap) {
+          if (connectedUserId !== userId) {
+            req.io.to(socketId).emit("status_liked", {
+              statusId: status._id,
+              likedBy: populatedStatus.likedBy,
+            });
+          }
+        }
+      }
       if (!status) {
         return response(res, 404, "Status not found");
       }
@@ -209,8 +306,18 @@ const deleteStatus = async (req, res) => {
 
       //Emit socket event to notify status deletion
       if (req.io && req.socketUserMap) {
+        console.log(
+          "[DEBUG] Emitting status_deleted. socketUserMap:",
+          Array.from(req.socketUserMap.entries())
+        );
         for (const [connectedUserId, socketId] of req.socketUserMap) {
+          console.log(
+            `[DEBUG] Checking user ${connectedUserId} (socket ${socketId}) for status_deleted`
+          );
           if (connectedUserId !== userId) {
+            console.log(
+              `[DEBUG] Emitting status_deleted to socket ${socketId}`
+            );
             req.io.to(socketId).emit("status_deleted", statusId);
           }
         }

@@ -17,6 +17,14 @@ const statusSchema = new mongoose.Schema(
       default: "text",
       required: true,
     },
+    backgroundColor: {
+      type: String,
+      default: null, // For text statuses with gradient backgrounds
+    },
+    caption: {
+      type: String,
+      default: null, // For media statuses
+    },
     viewers: { type: [mongoose.Schema.Types.ObjectId], ref: "User" },
     expiresAt: {
       type: Date,
