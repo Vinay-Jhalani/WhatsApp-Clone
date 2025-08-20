@@ -25,7 +25,7 @@ const useStatusStore = create((set, get) => ({
         const exists = state.statuses.some((s) => s._id === newStatus._id);
         const updatedStatuses = exists
           ? state.statuses
-          : [...state.statuses, newStatus];
+          : [newStatus, ...state.statuses];
         console.log("[DEBUG] statuses after new_status:", updatedStatuses);
         return { statuses: updatedStatuses };
       });

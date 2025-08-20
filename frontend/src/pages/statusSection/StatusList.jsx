@@ -1,6 +1,7 @@
 import React from "react";
 import Avatar from "../../components/Avatar";
 import formatTimestamp from "../../utils/formatTime";
+import useUserStore from "../../store/useUserStore";
 
 const formatStatusPreview = (status) => {
   if (status.contentType !== "text") {
@@ -18,47 +19,63 @@ const formatStatusPreview = (status) => {
 const StatusList = ({ contact, onPreview, theme }) => {
   if (!contact) return null;
 
-  // If contact has multiple statuses, render them as a list
+  const userId = useUserStore.getState().user?._id || null;
+  console.log(userId);
+
   if (Array.isArray(contact.statuses) && contact.statuses.length > 0) {
+    const latestStatus = contact.statuses[0];
+
+    // ✅ Check if userId exists in viewers array
+    const viewed = latestStatus.viewers?.some(
+      (viewer) => viewer._id === userId
+    );
+    const notViewed = !viewed;
+
     return (
-      <div className="space-y-2">
-        {contact.statuses.map((s, idx) => (
+      <div
+        className={`cursor-pointer flex items-center space-x-3 p-2 rounded ${
+          theme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-100"
+        }`}
+        onClick={() => onPreview && onPreview(contact, 0)}
+      >
+        {/* Story circle wrapper */}
+        <div
+          className={`p-[2px] rounded-full ${
+            notViewed
+              ? "bg-gradient-to-tr from-green-400 to-green-600" // colorful ring if not viewed
+              : "bg-gray-400" // gray ring if viewed
+          }`}
+        >
+          {/* Inner circle (actual avatar) */}
+          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+            {contact.avatar ? (
+              <img
+                src={contact.avatar}
+                alt={contact.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <Avatar
+                name={contact.name || contact.id}
+                size="w-10 h-10"
+                textSize="text-sm"
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1">
+          <div className="font-medium">{contact.name || "Unknown"}</div>
           <div
-            key={s.id || s._id || idx}
-            onClick={() => onPreview && onPreview(contact, idx)}
-            className={`cursor-pointer flex items-center space-x-3 p-2 rounded ${
-              theme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-100"
+            className={`text-xs ${
+              theme === "dark" ? "text-gray-400" : "text-gray-500"
             }`}
           >
-            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-              {contact.avatar ? (
-                <img
-                  src={contact.avatar}
-                  alt={contact.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Avatar
-                  name={contact.name || contact.id}
-                  size="w-10 h-10"
-                  textSize="text-sm"
-                />
-              )}
-            </div>
-
-            <div className="flex-1">
-              <div className="font-medium">{contact.name || "Unknown"}</div>
-              <div
-                className={`text-xs ${
-                  theme === "dark" ? "text-gray-400" : "text-gray-500"
-                }`}
-              >
-                {formatStatusPreview(s)} •{" "}
-                {formatTimestamp(s.timeStamp || s.createdAt)}
-              </div>
-            </div>
+            {contact.statuses.length} status
+            {contact.statuses.length > 1 ? "es" : ""} •{" "}
+            {formatTimestamp(latestStatus.timeStamp || latestStatus.createdAt)}
           </div>
-        ))}
+        </div>
       </div>
     );
   }

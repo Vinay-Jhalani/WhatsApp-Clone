@@ -132,7 +132,7 @@ const viewStatus = async (req, res) => {
         .populate("viewers", "username profilePicture")
         .populate("likedBy", "username profilePicture");
 
-      // 🎯 SOCKET NOTIFICATION - Only to status owner
+      // 🎯 SOCKET NOTIFICATION - Only to status owner and viewer
       if (req.io && req.socketUserMap) {
         console.log(
           "[DEBUG] Emitting status_viewed. socketUserMap:",
@@ -141,21 +141,24 @@ const viewStatus = async (req, res) => {
         const statusOwnerSocketId = req.socketUserMap.get(
           status.user._id.toString()
         );
-        console.log(
-          `[DEBUG] statusOwnerSocketId for user ${status.user._id}:`,
-          statusOwnerSocketId
-        );
+        const viewerSocketId = req.socketUserMap.get(userId.toString());
+        const viewData = {
+          statusId,
+          viewerId: userId,
+          totalViews: updatedStatus.viewers.length,
+          viewers: updatedStatus.viewers,
+        };
         if (statusOwnerSocketId) {
-          const viewData = {
-            statusId,
-            viewerId: userId,
-            totalViews: updatedStatus.viewers.length,
-            viewers: updatedStatus.viewers,
-          };
           console.log(
             `[DEBUG] Emitting status_viewed to socket ${statusOwnerSocketId}`
           );
           req.io.to(statusOwnerSocketId).emit("status_viewed", viewData);
+        }
+        if (viewerSocketId) {
+          console.log(
+            `[DEBUG] Emitting status_viewed to viewer socket ${viewerSocketId}`
+          );
+          req.io.to(viewerSocketId).emit("status_viewed", viewData);
         }
       }
 
@@ -281,55 +284,37 @@ const deleteStatus = async (req, res) => {
     const { statusId } = req.params;
     const userId = req.userId;
 
-    try {
-      const status = await Status.findById(statusId);
-      // Emit socket event for liking status
-      if (req.io && req.socketUserMap) {
-        for (const [connectedUserId, socketId] of req.socketUserMap) {
-          if (connectedUserId !== userId) {
-            req.io.to(socketId).emit("status_liked", {
-              statusId: status._id,
-              likedBy: populatedStatus.likedBy,
-            });
-          }
-        }
-      }
-      if (!status) {
-        return response(res, 404, "Status not found");
-      }
-
-      if (status.user.toString() !== userId.toString()) {
-        return response(res, 403, "Unauthorized");
-      }
-
-      await status.deleteOne();
-
-      //Emit socket event to notify status deletion
-      if (req.io && req.socketUserMap) {
-        console.log(
-          "[DEBUG] Emitting status_deleted. socketUserMap:",
-          Array.from(req.socketUserMap.entries())
-        );
-        for (const [connectedUserId, socketId] of req.socketUserMap) {
-          console.log(
-            `[DEBUG] Checking user ${connectedUserId} (socket ${socketId}) for status_deleted`
-          );
-          if (connectedUserId !== userId) {
-            console.log(
-              `[DEBUG] Emitting status_deleted to socket ${socketId}`
-            );
-            req.io.to(socketId).emit("status_deleted", statusId);
-          }
-        }
-      }
-
-      return response(res, 200, "Status deleted successfully");
-    } catch (error) {
-      console.error("Error deleting status:", error);
-      return response(res, 500, "Internal server error");
+    const status = await Status.findById(statusId);
+    if (!status) {
+      return response(res, 404, "Status not found");
     }
+
+    if (status.user.toString() !== userId.toString()) {
+      return response(res, 403, "Unauthorized");
+    }
+
+    await status.deleteOne();
+
+    // Emit socket event to notify status deletion
+    if (req.io && req.socketUserMap) {
+      console.log(
+        "[DEBUG] Emitting status_deleted. socketUserMap:",
+        Array.from(req.socketUserMap.entries())
+      );
+      for (const [connectedUserId, socketId] of req.socketUserMap) {
+        console.log(
+          `[DEBUG] Checking user ${connectedUserId} (socket ${socketId}) for status_deleted`
+        );
+        if (connectedUserId !== userId) {
+          console.log(`[DEBUG] Emitting status_deleted to socket ${socketId}`);
+          req.io.to(socketId).emit("status_deleted", statusId);
+        }
+      }
+    }
+
+    return response(res, 200, "Status deleted successfully");
   } catch (error) {
-    console.error("Error in deleteStatus:", error);
+    console.error("Error deleting status:", error);
     return response(res, 500, "Internal server error");
   }
 };

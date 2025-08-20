@@ -9,7 +9,7 @@ import TextStatusCreator from "../../components/TextStatusCreator";
 import MediaStatusCreator from "../../components/MediaStatusCreator";
 import { motion } from "framer-motion";
 import Avatar from "../../components/Avatar";
-import { FaEllipsisH, FaPlus, FaCamera } from "react-icons/fa";
+import { FaEllipsisH, FaPlus, FaCamera, FaEye } from "react-icons/fa";
 import formatTimestamp from "../../utils/formatTime";
 import StatusList from "./StatusList";
 
@@ -25,7 +25,7 @@ const Status = () => {
   const [mediaType, setMediaType] = useState("photo"); // "photo" or "video"
 
   const { theme } = useThemeStore();
-  const { user } = useUserStore();
+  const user = useUserStore((state) => state.user);
 
   //status store
   const {
@@ -277,9 +277,9 @@ const Status = () => {
                   : handleCreateStatusClick()
               }
             >
-              {user?.profileAvatar ? (
+              {user?.profilePicture ? (
                 <img
-                  src={user?.profileAvatar}
+                  src={user?.profilePicture}
                   alt={user?.username}
                   className="w-12 h-12 rounded-full object-cover"
                 />
@@ -319,26 +319,16 @@ const Status = () => {
                       );
                     })}
                   </svg>
-                  <button
+                  {/* <button
                     className="absolute bottom-0 right-0 bg-green-500 text-white p-1 rounded-full"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleCreateStatusClick();
                     }}
-                  >
-                    <FaPlus className="h-2 w-2" />
-                  </button>
+                  ></button> */}
                 </>
               ) : (
-                <button
-                  className="absolute bottom-0 right-0 bg-green-500 text-white p-1 rounded-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCreateStatusClick();
-                  }}
-                >
-                  <FaPlus className="h-2 w-2" />
-                </button>
+                <></>
               )}
             </div>
 
@@ -360,22 +350,22 @@ const Status = () => {
               </p>
             </div>
 
-            {userStatus && (
+            {
               <button
                 className="ml-auto"
                 onClick={() => setShowOptions(!showOptions)}
               >
-                <FaEllipsisH
+                <FaPlus
                   className={`h-5 w-5 ${
                     theme === "dark" ? "text-gray-400" : "text-gray-500"
                   }`}
                 />
               </button>
-            )}
+            }
           </div>
 
           {/* Options Menu */}
-          {showOptions && userStatus && (
+          {showOptions && (
             <div
               className={`shadow-md p-2 ${
                 theme === "dark" ? "bg-[rgb(17,27,33)]" : "bg-white"
@@ -388,18 +378,20 @@ const Status = () => {
                   setShowOptions(false);
                 }}
               >
-                <FaCamera className="inline-block mr-2" /> Add Status
+                <FaCamera className="inline-block mr-2" /> New Status
               </button>
 
-              <button
-                className="w-full text-left text-blue-500 py-2 hover:bg-gray-100 px-2 rounded"
-                onClick={() => {
-                  handleStatusPreview(userStatus);
-                  setShowOptions(false);
-                }}
-              >
-                View Status
-              </button>
+              {userStatus && (
+                <button
+                  className="w-full text-left text-blue-500 py-2 hover:bg-gray-100 px-2 rounded flex items-center"
+                  onClick={() => {
+                    handleStatusPreview(userStatus);
+                    setShowOptions(false);
+                  }}
+                >
+                  <FaEye className="inline-block mr-2" /> View Status
+                </button>
+              )}
             </div>
           )}
 
@@ -503,28 +495,80 @@ const Status = () => {
 
           {/* Empty state */}
           {!loading && statuses.length === 0 && (
-            <div className="flex flex-col items-center justify-center p-8 text-center">
-              <div
-                className={`text-6xl mb-4 ${
-                  theme === "dark" ? "text-gray-600" : "text-gray-300"
-                }`}
-              >
-                📱
+            <div className="w-full justify-center flex pt-25">
+              <div className="flex flex-col items-center justify-center p-8 text-center">
+                <div
+                  className={`text-6xl mb-4 ${
+                    theme === "dark" ? "text-gray-600" : "text-gray-300"
+                  }`}
+                >
+                  <svg
+                    viewBox="0 0 1024 1024"
+                    width={100}
+                    height={100}
+                    className="opacity-70"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M696.2 1000.9H321c-46 0-83.3-37.3-83.3-83.3V103.9c0-46 37.3-83.3 83.3-83.3h375.2c46 0 83.3 37.3 83.3 83.3v813.7c0 46.1-37.3 83.3-83.3 83.3z"
+                      fill="#9DC6AF"
+                    />
+                    <path
+                      d="M692.2 1014.6H325c-55.6 0-100.9-45.3-100.9-100.9V107.9C224.1 52.3 269.4 7 325 7h367.2c55.6 0 100.9 45.3 100.9 100.9v805.8c0 55.6-45.2 100.9-100.9 100.9zM325 34.3c-40.6 0-73.6 33-73.6 73.6v805.8c0 40.6 33 73.6 73.6 73.6h367.2c40.6 0 73.6-33 73.6-73.6V107.9c0-40.6-33-73.6-73.6-73.6H325z"
+                      fill="#191919"
+                    />
+                    <path d="M237.7 146.1h541.8v672.1H237.7z" fill="#FAFCFB" />
+                    <path
+                      d="M779.5 831.8H237.7c-7.5 0-13.6-6.1-13.6-13.6V146.1c0-7.5 6.1-13.6 13.6-13.6h541.8c7.5 0 13.6 6.1 13.6 13.6v672.1c0 7.5-6.1 13.6-13.6 13.6z m-528.1-27.2h514.5V159.7H251.4v644.9z"
+                      fill="#0F0F0F"
+                    />
+                    <path
+                      d="M374.9 431.7m-29.6 0a29.6 29.6 0 1 0 59.2 0 29.6 29.6 0 1 0-59.2 0Z"
+                      fill="#0F0F0F"
+                    />
+                    <path
+                      d="M642.3 431.7m-29.6 0a29.6 29.6 0 1 0 59.2 0 29.6 29.6 0 1 0-59.2 0Z"
+                      fill="#0F0F0F"
+                    />
+                    {/* straight mouth */}
+                    <line
+                      x1="443"
+                      y1="520"
+                      x2="574"
+                      y2="520"
+                      stroke="#0F0F0F"
+                      strokeWidth="28"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M560.5 90.4H456.8c-7.5 0-13.6-6.1-13.6-13.6s6.1-13.6 13.6-13.6h103.7c7.5 0 13.6 6.1 13.6 13.6s-6.1 13.6-13.6 13.6z"
+                      fill="#0F0F0F"
+                    />
+                    <path
+                      d="M508.6 909.2m-37.9 0a37.9 37.9 0 1 0 75.8 0 37.9 37.9 0 1 0-75.8 0Z"
+                      fill="#FAFCFB"
+                    />
+                    <path
+                      d="M508.6 960.7c-28.4 0-51.5-23.1-51.5-51.5s23.1-51.5 51.5-51.5 51.5 23.1 51.5 51.5-23.1 51.5-51.5 51.5z m0-75.8c-13.4 0-24.3 10.9-24.3 24.3s10.9 24.3 24.3 24.3 24.3-10.9 24.3-24.3-10.9-24.3-24.3-24.3z"
+                      fill="#0F0F0F"
+                    />
+                  </svg>
+                </div>
+                <h3
+                  className={`text-2xl font-semibold mb-2 ${
+                    theme === "dark" ? "text-gray-400" : "text-gray-600"
+                  }`}
+                >
+                  No Status updated yet
+                </h3>
+                <p
+                  className={`text-sm ${
+                    theme === "dark" ? "text-gray-500" : "text-gray-600"
+                  }`}
+                >
+                  Be the first to share a status update
+                </p>
               </div>
-              <h3
-                className={`text-lg font-semibold mb-2 ${
-                  theme === "dark" ? "text-gray-400" : "text-gray-600"
-                }`}
-              >
-                No Status updated yet
-              </h3>
-              <p
-                className={`text-sm ${
-                  theme === "dark" ? "text-gray-500" : "text-gray-600"
-                }`}
-              >
-                Be the first to share a status update
-              </p>
             </div>
           )}
         </div>

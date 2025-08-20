@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   FaTrash,
   FaHeart,
@@ -214,18 +214,8 @@ const StatusPreview = ({
               {isOwner && (
                 <>
                   <button
-                    onClick={handleViewersClick}
-                    className="text-white hover:text-gray-300 transition-colors flex items-center space-x-1"
-                  >
-                    <FaEye className="h-4 w-4" />
-                    <span className="text-xs">
-                      {currentStatus.viewers?.length || 0}
-                    </span>
-                  </button>
-
-                  <button
                     onClick={() => onDelete(currentStatus.id)}
-                    className="text-red-400 hover:text-red-300 transition-colors"
+                    className="text-white hover:text-gray-300 transition-colors pr-5"
                   >
                     <FaTrash className="h-4 w-4" />
                   </button>
@@ -313,11 +303,25 @@ const StatusPreview = ({
         </div>
 
         {/* Bottom actions */}
+        {isOwner && (
+          <div className="absolute bottom-0 left-0 right-0 items-center justify-center p-6 flex space-x-6">
+            <button
+              onClick={handleViewersClick}
+              className="text-white hover:text-gray-300 transition-colors flex items-center space-x-1"
+            >
+              <FaEye className="h-5 w-5" />
+              <span className="text-sm">
+                {currentStatus.viewers?.length || 0}
+              </span>
+            </button>
+          </div>
+        )}
+
         {!isOwner && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center justify-center space-x-6">
+          <div className="absolute bottom-0 left-0 right-0 justify-end p-6 flex space-x-6">
             <button
               onClick={handleLike}
-              className={`flex items-center space-x-2 transition-colors ${
+              className={`flex space-x-2 transition-colors ${
                 isLiked ? "text-red-500" : "text-white hover:text-red-400"
               }`}
             >
@@ -326,67 +330,87 @@ const StatusPreview = ({
               ) : (
                 <FaRegHeart className="h-6 w-6" />
               )}
-              <span className="text-sm">
-                {currentStatus?.likedBy?.length > 0
-                  ? `${currentStatus.likedBy.length} ${
-                      currentStatus.likedBy.length === 1 ? "Like" : "Likes"
-                    }`
-                  : "Like"}
-              </span>
+            </button>
+          </div>
+        )}
+        {!isOwner && (
+          <div className="absolute bottom-0 left-0 right-0 justify-end p-6 flex space-x-6">
+            <button
+              onClick={handleLike}
+              className={`flex space-x-2 transition-colors ${
+                isLiked ? "text-red-500" : "text-white hover:text-red-400"
+              }`}
+            >
+              {isLiked ? (
+                <FaHeart className="h-6 w-6" />
+              ) : (
+                <FaRegHeart className="h-6 w-6" />
+              )}
             </button>
           </div>
         )}
 
         {/* Viewers modal */}
-        {showViewers && isOwner && (
-          <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-lg p-4 max-h-64 overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Viewers ({currentStatus.viewers?.length || 0})
-              </h3>
-              <button
-                onClick={() => setShowViewers(false)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              >
-                <IoMdClose className="h-5 w-5" />
-              </button>
-            </div>
+        <AnimatePresence>
+          {showViewers && isOwner && (
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-lg p-4 max-h-64 overflow-y-auto "
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Viewers ({currentStatus.viewers?.length || 0})
+                </h3>
+                <button
+                  onClick={() => setShowViewers(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                >
+                  <IoMdClose className="h-5 w-5" />
+                </button>
+              </div>
 
-            <div className="space-y-2">
-              {currentStatus.viewers?.map((viewer, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    {viewer.profilePicture ? (
-                      <img
-                        src={viewer.profilePicture}
-                        alt={viewer.username}
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
-                    ) : (
-                      <Avatar
-                        name={viewer.username}
-                        size="w-8 h-8"
-                        textSize="text-xs"
-                      />
+              <div className="space-y-2">
+                {currentStatus.viewers?.map((viewer, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center space-x-3">
+                      {viewer.profilePicture ? (
+                        <img
+                          src={viewer.profilePicture}
+                          alt={viewer.username}
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <Avatar
+                          name={viewer.username}
+                          size="w-8 h-8"
+                          textSize="text-xs"
+                        />
+                      )}
+                      <span className="text-gray-900 dark:text-white text-sm">
+                        {viewer.username}
+                      </span>
+                    </div>
+
+                    {/* Show heart if viewer liked the status */}
+                    {hasViewerLikedStatus(viewer._id || viewer.id) && (
+                      <FaHeart className="h-4 w-4 text-red-500" />
                     )}
-                    <span className="text-gray-900 dark:text-white text-sm">
-                      {viewer.username}
-                    </span>
                   </div>
-
-                  {/* Show heart if viewer liked the status */}
-                  {hasViewerLikedStatus(viewer._id || viewer.id) && (
-                    <FaHeart className="h-4 w-4 text-red-500" />
-                  )}
-                </div>
-              )) || (
-                <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
-                  No views yet
-                </p>
-              )}
-            </div>
-          </div>
-        )}
+                )) || (
+                  <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
+                    No views yet
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </AnimatePresence>
   );
