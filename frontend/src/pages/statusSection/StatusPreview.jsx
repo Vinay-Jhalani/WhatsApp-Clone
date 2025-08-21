@@ -63,7 +63,7 @@ const StatusPreview = ({
           emoji: <div className="drop-shadow-lg drop-shadow-black/15">❤️</div>,
         },
       ]);
-    }, 1500);
+    }, 2000);
     return () => clearInterval(interval);
   }, []);
 

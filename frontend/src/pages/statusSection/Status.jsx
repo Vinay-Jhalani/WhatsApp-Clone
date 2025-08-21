@@ -23,6 +23,7 @@ const Status = () => {
   const [showTextCreator, setShowTextCreator] = useState(false);
   const [showMediaCreator, setShowMediaCreator] = useState(false);
   const [mediaType, setMediaType] = useState("photo"); // "photo" or "video"
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   const { theme } = useThemeStore();
   const user = useUserStore((state) => state.user);
@@ -240,7 +241,9 @@ const Status = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className={`flex-1 h-screen border-r border-gray-300 ${
+        className={`flex-1 h-screen  ${
+          !isMobile ? "border-r border-gray-300" : ""
+        } ${
           theme === "dark"
             ? "bg-[rgb(12,19,24)] text-white"
             : "bg-white text-black"

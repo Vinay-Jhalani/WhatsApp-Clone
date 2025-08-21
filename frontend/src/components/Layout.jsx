@@ -39,7 +39,9 @@ const Layout = ({
   return (
     <div
       className={`min-h-screen ${
-        theme === "dark" ? "bg-[#111b21] text-white" : "bg-gray-100 text-black"
+        theme === "dark"
+          ? "bg-[rgb(12,19,24)] text-white"
+          : "bg-white text-black"
       } flex relative`}
     >
       {!isMobile && <SideBar />}
