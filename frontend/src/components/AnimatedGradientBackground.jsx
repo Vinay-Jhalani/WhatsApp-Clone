@@ -43,7 +43,6 @@ const AnimatedGradientBackground = () => {
       colorSaturation: 7,
       wireframe: false,
       colorBlending: 8,
-      backgroundColor: "#003FFF",
       backgroundAlpha: 1,
       grainScale: 3,
       grainSparsity: 0.02,
@@ -74,7 +73,6 @@ const AnimatedGradientBackground = () => {
       style={{
         width: "100vw",
         height: "100vh",
-        background: "#003FFF",
       }}
     />
   );
